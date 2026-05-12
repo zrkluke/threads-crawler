@@ -1,71 +1,287 @@
-## Python Crawlee with Playwright template with Camoufox
+# Threads Crawler
 
-<!-- This is an Apify template readme -->
+An Apify Actor for scraping publicly visible Threads pages with Python, Crawlee, Playwright, and Camoufox.
 
-A template for [web scraping](https://apify.com/web-scraping) data from websites starting from provided URLs using Python. The starting URLs are passed through the Actor's input schema, defined by the [input schema](https://docs.apify.com/platform/actors/development/input-schema). The template uses [Crawlee for Python](https://crawlee.dev/python) for efficient web crawling, making requests via headless browser managed by [Playwright](https://playwright.dev/python/), and handling each request through a user-defined handler that uses [Playwright](https://playwright.dev/python/) API to extract data from the page. Enqueued URLs are managed in the [request queue](https://crawlee.dev/python/api/class/RequestQueue), and the extracted data is saved in a [dataset](https://crawlee.dev/python/api/class/Dataset) for easy access. It uses [Camoufox](https://github.com/daijro/camoufox) - a stealthy fork of Firefox - preinstalled. Note that Camoufox might consume more resources than the default Playwright-bundled Chromium or Firefox.
+The Actor is designed for local development and Apify deployment through GitHub. It loads dynamic Threads pages in a Camoufox browser, extracts visible profile and post data, and stores structured results in an Apify dataset.
 
-## Included features
+## Features
 
-- **[Apify SDK](https://docs.apify.com/sdk/python/)** - a toolkit for building Apify [Actors](https://apify.com/actors) in Python.
-- **[Crawlee for Python](https://crawlee.dev/python/)** - a web scraping and browser automation library.
-- **[Input schema](https://docs.apify.com/platform/actors/development/input-schema)** - define and validate a schema for your Actor's input.
-- **[Request queue](https://crawlee.dev/python/api/class/RequestQueue)** - manage the URLs you want to scrape in a queue.
-- **[Dataset](https://crawlee.dev/python/api/class/Dataset)** - store and access structured data extracted from web pages.
-- **[Playwright](https://playwright.dev/python/)** - a library for managing headless browsers.
-- **[Camoufox](https://camoufox.com/)** - a stealthy fork of Firefox.
+- Crawl publicly visible Threads profile pages.
+- Batch crawl up to 100 accounts in one run.
+- Support five crawl modes:
+  - Profile pages by username.
+  - Tag / topic pages.
+  - Keyword search pages.
+  - Single thread / post URLs, including publicly visible replies.
+  - Custom Threads feed URLs.
+- Support username input with or without `@`.
+- Support tags with or without `#`.
+- Support bulk paste fields for accounts and keywords.
+- Support relative date windows such as `7 days`, `1 month`, `24 hours`, `7 天`, or `1 個月`.
+- Support absolute `startDate` and `endDate` filters.
+- Extract profile metadata when visible:
+  - username
+  - display name
+  - bio
+  - external URL
+  - follower count
+- Extract visible post data:
+  - author
+  - relative timestamp
+  - best-effort ISO timestamp
+  - post text
+  - visible metrics
+  - media URLs found on the page
+- Optional raw visible text output for parser debugging.
 
-## Resources
+## Important Limitations
 
-- [Video introduction to Python SDK](https://www.youtube.com/watch?v=C8DmvJQS3jk)
-- [Webinar introducing to Crawlee for Python](https://www.youtube.com/live/ip8Ii0eLfRY)
-- [Apify Python SDK documentation](https://docs.apify.com/sdk/python/)
-- [Crawlee for Python documentation](https://crawlee.dev/python/docs/quick-start)
-- [Python tutorials in Academy](https://docs.apify.com/academy/python)
-- [Integration with Make, GitHub, Zapier, Google Drive, and other apps](https://apify.com/integrations)
-- [Video guide on getting scraped data using Apify API](https://www.youtube.com/watch?v=ViYYDHSBAKM)
-- A short guide on how to build web scrapers using code templates:
+This Actor does not log in to Threads and does not use a private API token. It only extracts data that Threads renders publicly in the browser.
 
-[web scraper template](https://www.youtube.com/watch?v=u-i-Korzf8w)
+Because of that:
 
+- Full historical posts may not be available. Threads can show `Log in to see more`.
+- Replies are only extracted when they are publicly visible on the loaded page.
+- Engagement fields depend on what the public page exposes.
+- `likes`, `replies`, `reposts`, `shares`, `views`, and `quotes` are best-effort mappings from visible metric numbers.
+- Some metrics may be `null` if Threads does not expose them publicly.
+- ISO timestamps are estimated from relative timestamps such as `12h`, `1d`, or `3w` using the scrape time.
+- Exact post URLs, permanent IDs, and deeper media metadata may require additional parser work.
+- Threads page structure can change, which may require selector/parser updates.
+- Camoufox reduces common automation fingerprints, but it does not guarantee access or bypass platform limits.
 
-## Getting started
+Use this Actor only for public data and make sure your usage complies with applicable laws, Threads terms, and Apify platform rules.
 
-For complete information [see this article](https://docs.apify.com/platform/actors/development#build-actor-locally). To run the Actor use the following command:
+## Input
+
+The Actor input is configured in `.actor/input_schema.json`.
+
+### `mode`
+
+Choose what to crawl:
+
+```json
+"profile"
+```
+
+Supported values:
+
+- `profile`
+- `tag`
+- `search`
+- `thread`
+- `feed`
+
+### Profile Mode
+
+Use `accounts` for structured input:
+
+```json
+{
+  "mode": "profile",
+  "accounts": ["largitdata"],
+  "maxItems": 10
+}
+```
+
+Or use `bulkAccounts`:
+
+```json
+{
+  "mode": "profile",
+  "bulkAccounts": "largitdata\nopenai\nmeta",
+  "maxItems": 100
+}
+```
+
+### Tag / Topic Mode
+
+```json
+{
+  "mode": "tag",
+  "keywordsOrTags": ["AI", "MachineLearning"],
+  "maxItems": 10
+}
+```
+
+### Keyword Search Mode
+
+```json
+{
+  "mode": "search",
+  "keywordsOrTags": ["AI agent", "Crawlee"],
+  "searchSort": "top",
+  "maxItems": 10
+}
+```
+
+### Single Thread Mode
+
+```json
+{
+  "mode": "thread",
+  "threadUrls": [
+    {
+      "url": "https://www.threads.com/@largitdata/post/POST_ID"
+    }
+  ],
+  "maxItems": 10
+}
+```
+
+### Custom Feed Mode
+
+```json
+{
+  "mode": "feed",
+  "feedUrls": [
+    {
+      "url": "https://www.threads.com/"
+    }
+  ],
+  "maxItems": 10
+}
+```
+
+### Date Filters
+
+```json
+{
+  "mode": "profile",
+  "accounts": ["largitdata"],
+  "relativeDate": "7 days"
+}
+```
+
+You can also use absolute dates:
+
+```json
+{
+  "mode": "profile",
+  "accounts": ["largitdata"],
+  "startDate": "2026-05-01",
+  "endDate": "2026-05-12"
+}
+```
+
+Date filtering is best-effort because public Threads pages often expose only relative timestamps.
+
+## Output
+
+Each dataset item represents one crawled target.
+
+Example shape:
+
+```json
+{
+  "url": "https://www.threads.com/@largitdata",
+  "mode": "profile",
+  "target": "largitdata",
+  "scraped_at": "2026-05-12T06:44:40.405672+00:00",
+  "title": "@largitdata • Threads, Say more",
+  "profile": {
+    "username": "largitdata",
+    "display_name": "largitdata",
+    "bio": "...",
+    "external_url": "largitdata.com",
+    "followers": "4,847 followers"
+  },
+  "posts": [
+    {
+      "author": "largitdata",
+      "posted_at": "15h",
+      "posted_at_iso": "2026-05-11T15:44:40.405672+00:00",
+      "text": "...",
+      "metrics": {
+        "likes": "10",
+        "replies": "1",
+        "reposts": "1",
+        "shares": "2",
+        "views": null,
+        "quotes": null,
+        "raw": ["10", "1", "1", "2"]
+      }
+    }
+  ],
+  "media_urls": [
+    "https://..."
+  ]
+}
+```
+
+## Local Development
+
+Install the Apify CLI:
 
 ```bash
-apify run
+npm install -g apify-cli
 ```
+
+Create and activate a Python virtual environment:
+
+```bash
+python -m venv .venv
+.venv\Scripts\activate
+```
+
+Install dependencies:
+
+```bash
+python -m pip install -r requirements.txt
+```
+
+Run locally:
+
+```bash
+apify run --purge
+```
+
+Local test input is stored in:
+
+```text
+storage/key_value_stores/default/INPUT.json
+```
+
+Local dataset output is stored in:
+
+```text
+storage/datasets/default/
+```
+
+The `storage/` and `.venv/` directories are ignored by Git.
 
 ## Deploy to Apify
 
-### Connect Git repository to Apify
+This project is intended to be deployed from GitHub.
 
-If you've created a Git repository for the project, you can easily connect to Apify:
+1. Push changes to GitHub.
+2. Open Apify Console.
+3. Create or open the Actor.
+4. Link the GitHub repository.
+5. Build the Actor from the `main` branch.
 
-1. Go to [Actor creation page](https://console.apify.com/actors/new)
-2. Click on **Link Git Repository** button
+You can also deploy directly with:
 
-### Push project on your local machine to Apify
+```bash
+apify login
+apify push
+```
 
-You can also deploy the project on your local machine to Apify without the need for the Git repository.
+GitHub deployment is recommended because it keeps version history and makes future parser updates easier to review.
 
-1. Log in to Apify. You will need to provide your [Apify API Token](https://console.apify.com/account/integrations) to complete this action.
+## Tech Stack
 
-    ```bash
-    apify login
-    ```
+- Apify Python SDK
+- Crawlee for Python
+- Playwright
+- Camoufox
+- Python 3.12+
 
-2. Deploy your Actor. This command will deploy and build the Actor on the Apify Platform. You can find your newly created Actor under [Actors -> My Actors](https://console.apify.com/actors?tab=my).
+## Notes for Future Improvements
 
-    ```bash
-    apify push
-    ```
-
-## Documentation reference
-
-To learn more about Apify and Actors, take a look at the following resources:
-
-- [Apify SDK for JavaScript documentation](https://docs.apify.com/sdk/js)
-- [Apify SDK for Python documentation](https://docs.apify.com/sdk/python)
-- [Apify Platform documentation](https://docs.apify.com/platform)
-- [Join our developer community on Discord](https://discord.com/invite/jyEM2PRvMU)
+- Add deeper scrolling for profiles and feed pages.
+- Improve single-thread reply parsing.
+- Extract stable post URLs and IDs.
+- Map metric numbers to labels more reliably by inspecting DOM structure.
+- Add optional authenticated session support for private internal use cases.
+- Add tests around parser behavior using saved page text fixtures.
