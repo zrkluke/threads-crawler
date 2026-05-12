@@ -158,6 +158,8 @@ def _parse_posts(lines: list[str], username: str | None, user_data: dict, scrape
     if not username:
         return []
 
+    max_posts = int(user_data.get('maxPostsPerAccount') or 10)
+
     try:
         start = max(lines.index(tab) for tab in ('Threads', 'Replies', 'Media', 'Reposts') if tab in lines) + 1
     except ValueError:
@@ -230,6 +232,8 @@ def _parse_posts(lines: list[str], username: str | None, user_data: dict, scrape
                     'metrics': _parse_visible_metrics(metrics),
                 }
             )
+            if len(posts) >= max_posts:
+                break
 
     return posts
 

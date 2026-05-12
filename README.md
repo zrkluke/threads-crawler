@@ -18,6 +18,7 @@ The Actor is designed for local development and Apify deployment through GitHub.
 - Support tags with or without `#`.
 - Support bulk paste fields for accounts and keywords.
 - Support relative date windows such as `7 days`, `1 month`, `24 hours`, `7 天`, or `1 個月`.
+- Limit returned posts per account or target with `maxPostsPerAccount`.
 - Support absolute `startDate` and `endDate` filters.
 - Extract profile metadata when visible:
   - username
@@ -80,7 +81,7 @@ Use `accounts` for structured input:
 {
   "mode": "profile",
   "accounts": ["largitdata"],
-  "maxItems": 10
+  "maxPostsPerAccount": 10
 }
 ```
 
@@ -90,7 +91,7 @@ Or use `bulkAccounts`:
 {
   "mode": "profile",
   "bulkAccounts": "largitdata\nopenai\nmeta",
-  "maxItems": 100
+  "maxPostsPerAccount": 10
 }
 ```
 
@@ -100,7 +101,7 @@ Or use `bulkAccounts`:
 {
   "mode": "tag",
   "keywordsOrTags": ["AI", "MachineLearning"],
-  "maxItems": 10
+  "maxPostsPerAccount": 10
 }
 ```
 
@@ -111,7 +112,7 @@ Or use `bulkAccounts`:
   "mode": "search",
   "keywordsOrTags": ["AI agent", "Crawlee"],
   "searchSort": "top",
-  "maxItems": 10
+  "maxPostsPerAccount": 10
 }
 ```
 
@@ -125,7 +126,7 @@ Or use `bulkAccounts`:
       "url": "https://www.threads.com/@largitdata/post/POST_ID"
     }
   ],
-  "maxItems": 10
+  "maxPostsPerAccount": 10
 }
 ```
 
@@ -139,7 +140,7 @@ Or use `bulkAccounts`:
       "url": "https://www.threads.com/"
     }
   ],
-  "maxItems": 10
+  "maxPostsPerAccount": 10
 }
 ```
 

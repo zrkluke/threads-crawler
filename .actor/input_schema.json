@@ -117,9 +117,9 @@
                 }
             }
         },
-        "maxItems": {
-            "title": "Max items",
-            "description": "Maximum number of start targets to crawl in this run.",
+        "maxPostsPerAccount": {
+            "title": "Max posts per account",
+            "description": "Maximum number of posts to return per crawled account or target.",
             "type": "integer",
             "editor": "number",
             "default": 10,

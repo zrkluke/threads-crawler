@@ -50,7 +50,7 @@ def _urls_from_request_list(items: list[dict[str, str]] | None) -> list[str]:
 
 def _build_requests(actor_input: dict) -> list[Request]:
     mode = actor_input.get('mode', 'profile')
-    max_items = min(int(actor_input.get('maxItems') or 10), 100)
+    max_posts_per_account = min(int(actor_input.get('maxPostsPerAccount') or actor_input.get('maxItems') or 10), 100)
     common_user_data = {
         'mode': mode,
         'startDate': actor_input.get('startDate'),
@@ -58,6 +58,7 @@ def _build_requests(actor_input: dict) -> list[Request]:
         'relativeDate': actor_input.get('relativeDate'),
         'includeRawText': bool(actor_input.get('includeRawText')),
         'searchSort': actor_input.get('searchSort', 'top'),
+        'maxPostsPerAccount': max_posts_per_account,
     }
 
     requests: list[Request] = []
@@ -100,7 +101,7 @@ def _build_requests(actor_input: dict) -> list[Request]:
         for url in _dedupe(_urls_from_request_list(actor_input.get('feedUrls'))):
             requests.append(Request.from_url(url, user_data={**common_user_data, 'target': url}))
 
-    return requests[:max_items]
+    return requests
 
 
 class CamoufoxPlugin(PlaywrightBrowserPlugin):
