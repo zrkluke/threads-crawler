@@ -1,12 +1,52 @@
 {
     "$schema": "https://apify.com/schemas/v1/dataset.ide.json",
     "actorSpecification": 1,
-    "fields": {},
+    "fields": {
+        "type": "object",
+        "properties": {
+            "url": {
+                "type": "string"
+            },
+            "mode": {
+                "type": "string"
+            },
+            "target": {
+                "type": "string"
+            },
+            "scraped_at": {
+                "type": "string"
+            },
+            "title": {
+                "type": "string"
+            },
+            "profile": {
+                "type": "object"
+            },
+            "posts": {
+                "type": "array"
+            },
+            "post_count": {
+                "type": "integer"
+            },
+            "post_urls": {
+                "type": "array"
+            },
+            "text": {
+                "type": ["string", "null"]
+            },
+            "telegram_text": {
+                "type": "string"
+            },
+            "media_urls": {
+                "type": "array"
+            }
+        }
+    },
     "views": {
         "overview": {
             "title": "Overview",
             "transformation": {
-                "fields": ["mode", "target", "url", "profile", "posts", "media_urls", "scraped_at"]
+                "fields": ["mode", "target", "url", "post_count", "post_urls", "text", "telegram_text", "profile", "posts", "media_urls", "scraped_at"]
             },
             "display": {
                 "component": "table",
@@ -22,6 +62,22 @@
                     "url": {
                         "label": "URL",
                         "format": "link"
+                    },
+                    "post_count": {
+                        "label": "Post count",
+                        "format": "number"
+                    },
+                    "post_urls": {
+                        "label": "Post URLs",
+                        "format": "array"
+                    },
+                    "text": {
+                        "label": "Latest post text",
+                        "format": "text"
+                    },
+                    "telegram_text": {
+                        "label": "Telegram text",
+                        "format": "text"
                     },
                     "profile": {
                         "label": "Profile",
