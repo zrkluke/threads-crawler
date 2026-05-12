@@ -24,21 +24,6 @@
             },
             "posts": {
                 "type": "array"
-            },
-            "post_count": {
-                "type": "integer"
-            },
-            "post_urls": {
-                "type": "array"
-            },
-            "text": {
-                "type": ["string", "null"]
-            },
-            "telegram_text": {
-                "type": "string"
-            },
-            "media_urls": {
-                "type": "array"
             }
         }
     },
@@ -46,7 +31,7 @@
         "overview": {
             "title": "Overview",
             "transformation": {
-                "fields": ["mode", "target", "url", "post_count", "post_urls", "text", "telegram_text", "profile", "posts", "media_urls", "scraped_at"]
+                "fields": ["mode", "target", "url", "profile", "posts", "scraped_at"]
             },
             "display": {
                 "component": "table",
@@ -63,32 +48,12 @@
                         "label": "URL",
                         "format": "link"
                     },
-                    "post_count": {
-                        "label": "Post count",
-                        "format": "number"
-                    },
-                    "post_urls": {
-                        "label": "Post URLs",
-                        "format": "array"
-                    },
-                    "text": {
-                        "label": "Latest post text",
-                        "format": "text"
-                    },
-                    "telegram_text": {
-                        "label": "Telegram text",
-                        "format": "text"
-                    },
                     "profile": {
                         "label": "Profile",
                         "format": "object"
                     },
                     "posts": {
                         "label": "Posts",
-                        "format": "array"
-                    },
-                    "media_urls": {
-                        "label": "Media URLs",
                         "format": "array"
                     },
                     "scraped_at": {

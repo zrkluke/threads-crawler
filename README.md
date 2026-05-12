@@ -31,14 +31,8 @@ The Actor is designed for local development and Apify deployment through GitHub.
   - relative timestamp
   - best-effort ISO timestamp
   - post text
-  - public post URL when Threads exposes it in page links
+  - `post_url` when Threads exposes a public post link in the page
   - visible metrics
-  - media URLs found on the page
-- Provide automation-friendly top-level fields:
-  - `post_count`
-  - `post_urls`
-  - `text` for the latest visible post text
-  - `telegram_text` for n8n / Telegram notifications
 - Optional raw visible text output for parser debugging.
 
 ## Important Limitations
@@ -53,7 +47,7 @@ Because of that:
 - `likes`, `replies`, `reposts`, `shares`, `views`, and `quotes` are best-effort mappings from visible metric numbers.
 - Some metrics may be `null` if Threads does not expose them publicly.
 - ISO timestamps are estimated from relative timestamps such as `12h`, `1d`, or `3w` using the scrape time.
-- Post URLs are extracted best-effort from public page links. If Threads hides or changes those links, `posts[].url` and `post_urls` can be empty.
+- Post URLs are extracted best-effort from public page links. If Threads hides or changes those links, `posts[].post_url` can be empty.
 - Permanent IDs and deeper media metadata may require additional parser work.
 - Threads page structure can change, which may require selector/parser updates.
 - Camoufox reduces common automation fingerprints, but it does not guarantee access or bypass platform limits.
@@ -199,7 +193,7 @@ Example shape:
       "author": "largitdata",
       "posted_at": "15h",
       "posted_at_iso": "2026-05-11T15:44:40.405672+00:00",
-      "url": "https://www.threads.com/@largitdata/post/POST_ID",
+      "post_url": "https://www.threads.com/@largitdata/post/POST_ID",
       "text": "...",
       "metrics": {
         "likes": "10",
@@ -211,39 +205,14 @@ Example shape:
         "raw": ["10", "1", "1", "2"]
       }
     }
-  ],
-  "post_count": 1,
-  "post_urls": [
-    "https://www.threads.com/@largitdata/post/POST_ID"
-  ],
-  "text": "...",
-  "telegram_text": "<b>@largitdata</b>\n\n1. 15h\n...\nhttps://www.threads.com/@largitdata/post/POST_ID\n\nhttps://www.threads.com/@largitdata",
-  "media_urls": [
-    "https://..."
   ]
 }
 ```
 
-### Automation fields
-
-For n8n, Zapier, Make, Telegram bots, and similar workflows, use these convenience fields instead of building expressions from nested arrays:
-
-- `telegram_text`: HTML-safe message text with the profile name, up to three visible posts, and post URLs. This field is designed for Telegram nodes using HTML parse mode.
-- `text`: latest visible post text, or `null` when no post text was parsed.
-- `post_urls`: all extracted public post URLs, in page order.
-- `posts[].url`: the URL attached to each parsed post when a matching Threads link is visible in the DOM.
-- `post_count`: number of parsed posts included in the dataset item.
-
-Example n8n Telegram Text expression:
+Example n8n expression for the latest post URL:
 
 ```js
-{{ $json.telegram_text }}
-```
-
-Example expression for only the latest post URL:
-
-```js
-{{ $json.posts?.[0]?.url || $json.post_urls?.[0] }}
+{{ $json.posts?.[0]?.post_url }}
 ```
 
 ## Local Development

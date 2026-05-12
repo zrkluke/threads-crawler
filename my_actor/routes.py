@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import re
-from html import escape
 from datetime import UTC, datetime, timedelta
 
 from apify import Actor
@@ -111,59 +110,6 @@ def _parse_visible_metrics(values: list[str]) -> dict[str, object]:
         'quotes': padded[5],
         'raw': values,
     }
-
-
-def _truncate_text(value: object, max_length: int = 900) -> str:
-    if not isinstance(value, str):
-        return ''
-    cleaned = value.strip()
-    if len(cleaned) <= max_length:
-        return cleaned
-    return f'{cleaned[: max_length - 1].rstrip()}...'
-
-
-def _build_telegram_text(data: dict[str, object]) -> str:
-    profile = data.get('profile')
-    posts = data.get('posts')
-    url = str(data.get('url') or '')
-
-    username = None
-    if isinstance(profile, dict):
-        username = profile.get('username') or data.get('target')
-    username_text = f'@{username}' if username else str(data.get('target') or 'Threads')
-
-    if not isinstance(posts, list) or not posts:
-        return '\n'.join(
-            [
-                f'<b>{escape(username_text)}</b>',
-                'No public posts were found in this run.',
-                escape(url),
-            ]
-        ).strip()
-
-    lines = [f'<b>{escape(username_text)}</b>']
-    for index, post in enumerate(posts[:3], start=1):
-        if not isinstance(post, dict):
-            continue
-
-        posted_at = escape(str(post.get('posted_at') or ''))
-        text = escape(_truncate_text(post.get('text')))
-        post_url = escape(str(post.get('url') or ''))
-        if not text:
-            continue
-
-        prefix = f'{index}.'
-        if posted_at:
-            prefix = f'{prefix} {posted_at}'
-        message = f'{prefix}\n{text}'
-        if post_url:
-            message = f'{message}\n{post_url}'
-        lines.append(message)
-
-    if url:
-        lines.append(escape(url))
-
-    return '\n\n'.join(lines).strip()
 
 
 def _parse_profile(lines: list[str]) -> dict[str, str | None]:
@@ -292,19 +238,6 @@ def _parse_posts(lines: list[str], username: str | None, user_data: dict, scrape
     return posts
 
 
-async def _extract_media_urls(context: PlaywrightCrawlingContext) -> list[str]:
-    media_urls = await context.page.evaluate(
-        """() => Array.from(
-            new Set([
-                ...Array.from(document.querySelectorAll('img')).map((element) => element.currentSrc || element.src),
-                ...Array.from(document.querySelectorAll('video')).map((element) => element.currentSrc || element.src),
-                ...Array.from(document.querySelectorAll('source')).map((element) => element.src),
-            ].filter(Boolean))
-        )"""
-    )
-    return [url for url in media_urls if isinstance(url, str) and url.startswith('http')]
-
-
 async def _extract_post_urls(context: PlaywrightCrawlingContext) -> list[str]:
     post_urls = await context.page.evaluate(
         r"""() => {
@@ -327,7 +260,7 @@ async def _extract_post_urls(context: PlaywrightCrawlingContext) -> list[str]:
 
 def _attach_post_urls(posts: list[dict[str, object]], post_urls: list[str]) -> None:
     for post, post_url in zip(posts, post_urls, strict=False):
-        post['url'] = post_url
+        post['post_url'] = post_url
 
 
 @router.default_handler
@@ -347,7 +280,6 @@ async def default_handler(context: PlaywrightCrawlingContext) -> None:
     posts = _parse_posts(lines, profile['username'], user_data, scraped_at)
     post_urls = await _extract_post_urls(context)
     _attach_post_urls(posts, post_urls)
-    latest_post_text = next((post.get('text') for post in posts if isinstance(post.get('text'), str) and post.get('text')), None)
 
     data = {
         'url': context.request.url,
@@ -357,12 +289,7 @@ async def default_handler(context: PlaywrightCrawlingContext) -> None:
         'title': await context.page.title(),
         'profile': profile,
         'posts': posts,
-        'post_count': len(posts),
-        'post_urls': post_urls,
-        'text': latest_post_text,
-        'media_urls': await _extract_media_urls(context),
     }
-    data['telegram_text'] = _build_telegram_text(data)
 
     if user_data.get('includeRawText'):
         data['raw_visible_text'] = body_text
