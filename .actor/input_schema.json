@@ -1,20 +1,139 @@
 {
     "$schema": "https://apify.com/schemas/v1/input.ide.json",
-    "title": "Python Crawlee Playwright with Camoufox Scraper",
+    "title": "Threads Crawler input",
     "type": "object",
     "schemaVersion": 1,
     "properties": {
-        "start_urls": {
-            "title": "Start URLs",
-            "type": "array",
-            "description": "URLs to start with",
-            "prefill": [
-                {
-                    "url": "https://apify.com"
-                }
+        "mode": {
+            "title": "Mode",
+            "description": "Choose what kind of Threads page to crawl.",
+            "type": "string",
+            "editor": "select",
+            "default": "profile",
+            "enum": ["profile", "tag", "search", "thread", "feed"],
+            "enumTitles": [
+                "Profile - crawl by account",
+                "Tag / topic",
+                "Keyword search",
+                "Single thread + replies",
+                "Custom feed URL"
             ],
-            "editor": "requestListSources"
+            "sectionCaption": "Mode"
+        },
+        "accounts": {
+            "title": "Account list",
+            "description": "Threads usernames to crawl. You can enter usernames with or without @.",
+            "type": "array",
+            "editor": "stringList",
+            "prefill": ["largitdata"],
+            "sectionCaption": "Profile mode",
+            "items": {
+                "type": "string"
+            }
+        },
+        "bulkAccounts": {
+            "title": "Bulk paste accounts",
+            "description": "Paste up to 100 accounts, separated by new lines, commas, or spaces.",
+            "type": "string",
+            "editor": "textarea"
+        },
+        "keywordsOrTags": {
+            "title": "Keywords / tags",
+            "description": "Keywords or tags for tag/topic and search modes. Enter tags with or without #.",
+            "type": "array",
+            "editor": "stringList",
+            "items": {
+                "type": "string"
+            },
+            "sectionCaption": "Tag / keyword mode"
+        },
+        "bulkKeywordsOrTags": {
+            "title": "Bulk paste keywords",
+            "description": "Paste keywords or tags separated by new lines or commas.",
+            "type": "string",
+            "editor": "textarea"
+        },
+        "searchSort": {
+            "title": "Search sort",
+            "description": "Sorting preference for keyword search when Threads exposes it in the page.",
+            "type": "string",
+            "editor": "select",
+            "default": "top",
+            "enum": ["top", "latest"],
+            "enumTitles": ["Top", "Latest"]
+        },
+        "startDate": {
+            "title": "Start date",
+            "description": "Optional absolute start date. Applies best-effort filtering to visible relative timestamps.",
+            "type": "string",
+            "editor": "datepicker",
+            "sectionCaption": "Date range"
+        },
+        "endDate": {
+            "title": "End date",
+            "description": "Optional absolute end date. Applies best-effort filtering to visible relative timestamps.",
+            "type": "string",
+            "editor": "datepicker"
+        },
+        "relativeDate": {
+            "title": "Relative date",
+            "description": "Optional relative date window, for example: 7 days, 1 month, 24 hours.",
+            "type": "string",
+            "editor": "textfield",
+            "prefill": "7 days"
+        },
+        "threadUrls": {
+            "title": "Thread URLs",
+            "description": "Single post / thread URLs. Replies are extracted when publicly visible.",
+            "type": "array",
+            "editor": "requestListSources",
+            "sectionCaption": "Thread / feed mode",
+            "items": {
+                "type": "object",
+                "required": ["url"],
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "title": "URL",
+                        "description": "Threads post URL"
+                    }
+                }
+            }
+        },
+        "feedUrls": {
+            "title": "Custom feed URLs",
+            "description": "Custom Threads feed URLs to crawl.",
+            "type": "array",
+            "editor": "requestListSources",
+            "items": {
+                "type": "object",
+                "required": ["url"],
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "title": "URL",
+                        "description": "Threads feed URL"
+                    }
+                }
+            }
+        },
+        "maxItems": {
+            "title": "Max items",
+            "description": "Maximum number of start targets to crawl in this run.",
+            "type": "integer",
+            "editor": "number",
+            "default": 10,
+            "minimum": 1,
+            "maximum": 100,
+            "sectionCaption": "General settings"
+        },
+        "includeRawText": {
+            "title": "Include raw visible text",
+            "description": "Store the full visible page text for debugging parser changes.",
+            "type": "boolean",
+            "editor": "checkbox",
+            "default": false
         }
     },
-    "required": ["start_urls"]
+    "required": ["mode"]
 }

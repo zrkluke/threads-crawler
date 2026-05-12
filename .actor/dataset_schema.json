@@ -6,30 +6,38 @@
         "overview": {
             "title": "Overview",
             "transformation": {
-                "fields": ["title", "url", "h1s", "h2s", "h3s"]
+                "fields": ["mode", "target", "url", "profile", "posts", "media_urls", "scraped_at"]
             },
             "display": {
                 "component": "table",
                 "properties": {
-                    "title": {
-                        "label": "Title",
+                    "mode": {
+                        "label": "Mode",
+                        "format": "text"
+                    },
+                    "target": {
+                        "label": "Target",
                         "format": "text"
                     },
                     "url": {
                         "label": "URL",
                         "format": "link"
                     },
-                    "h1s": {
-                        "label": "H1s",
+                    "profile": {
+                        "label": "Profile",
+                        "format": "object"
+                    },
+                    "posts": {
+                        "label": "Posts",
                         "format": "array"
                     },
-                    "h2s": {
-                        "label": "H2s",
+                    "media_urls": {
+                        "label": "Media URLs",
                         "format": "array"
                     },
-                    "h3s": {
-                        "label": "H3s",
-                        "format": "array"
+                    "scraped_at": {
+                        "label": "Scraped at",
+                        "format": "date"
                     }
                 }
             }
