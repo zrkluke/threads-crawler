@@ -1,0 +1,19 @@
+{
+	"$schema": "https://apify.com/schemas/v1/actor.ide.json",
+	"actorSpecification": 1,
+	"name": "threads-crawler",
+	"title": "Getting started with Python Crawlee and Playwright with Camoufox",
+	"description": "Scrapes titles of websites using Crawlee and Playwright with Camoufox.",
+	"version": "0.0",
+	"buildTag": "latest",
+	"meta": {
+		"templateId": "python-crawlee-playwright-camoufox",
+		"generatedBy": "<FILL-IN-MODEL>"
+	},
+	"input": "./input_schema.json",
+	"output": "./output_schema.json",
+	"storages": {
+		"dataset": "./dataset_schema.json"
+	},
+	"dockerfile": "../Dockerfile"
+}
