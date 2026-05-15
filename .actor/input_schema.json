@@ -82,6 +82,15 @@
             "editor": "textfield",
             "prefill": "7 days"
         },
+        "languageFilter": {
+            "title": "Language filter",
+            "description": "Filter extracted posts by language. Traditional Chinese is the default.",
+            "type": "string",
+            "editor": "select",
+            "default": "traditionalChinese",
+            "enum": ["traditionalChinese", "any"],
+            "enumTitles": ["Traditional Chinese", "Any language"]
+        },
         "threadUrls": {
             "title": "Thread URLs",
             "description": "Single post / thread URLs. Replies are extracted when publicly visible.",

@@ -70,6 +70,7 @@ def _build_requests(actor_input: dict) -> list[Request]:
         'startDate': actor_input.get('startDate'),
         'endDate': actor_input.get('endDate'),
         'relativeDate': actor_input.get('relativeDate'),
+        'languageFilter': actor_input.get('languageFilter', 'traditionalChinese'),
         'includeRawText': bool(actor_input.get('includeRawText')),
         'searchSort': search_sort,
         'maxPostsPerAccount': max_posts_per_account,

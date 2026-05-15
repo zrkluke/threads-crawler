@@ -174,6 +174,20 @@ You can also use absolute dates:
 
 Date filtering is best-effort because public Threads pages often expose only relative timestamps.
 
+### Language Filter
+
+By default, extracted posts are filtered to Traditional Chinese:
+
+```json
+{
+  "mode": "search",
+  "keywordsOrTags": ["claude code"],
+  "languageFilter": "traditionalChinese"
+}
+```
+
+Use `"languageFilter": "any"` to keep posts in any language.
+
 ## Output
 
 Each dataset item represents one crawled target.

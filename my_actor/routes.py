@@ -36,6 +36,8 @@ NON_AUTHOR_LINES = {
     'View',
     'More',
 }
+SIMPLIFIED_CHINESE_MARKERS = set('个们会后发关欢见过还进时说让从对该网车门东长云电头学习广书买卖开间问题体国现与扩优资料软体虽请这里为于号与实')
+CJK_PATTERN = re.compile(r'[\u4e00-\u9fff]')
 
 
 def _clean_lines(text: str) -> list[str]:
@@ -65,6 +67,21 @@ def _looks_like_author(value: str) -> bool:
     if _looks_like_post_time(normalized) or _is_metric_line(normalized):
         return False
     return len(normalized) <= 80
+
+
+def _matches_language_filter(text: str, language_filter: object) -> bool:
+    if language_filter in {None, '', 'any'}:
+        return True
+
+    if language_filter != 'traditionalChinese':
+        return True
+
+    normalized = text.strip()
+    if not CJK_PATTERN.search(normalized):
+        return False
+
+    simplified_hits = sum(1 for char in normalized if char in SIMPLIFIED_CHINESE_MARKERS)
+    return simplified_hits == 0
 
 
 def _parse_relative_datetime(value: str, scraped_at: datetime) -> str | None:
@@ -282,12 +299,16 @@ def _parse_posts(lines: list[str], username: str | None, user_data: dict, scrape
 
         posted_at_iso = _parse_relative_datetime(posted_at, scraped_at)
         if _is_in_date_range(posted_at_iso, user_data, scraped_at):
+            text = '\n'.join(content_lines)
+            if not _matches_language_filter(text, user_data.get('languageFilter')):
+                continue
+
             posts.append(
                 {
                     'author': author,
                     'posted_at': posted_at,
                     'posted_at_iso': posted_at_iso,
-                    'text': '\n'.join(content_lines),
+                    'text': text,
                     'metrics': _parse_visible_metrics(metrics),
                 }
             )
