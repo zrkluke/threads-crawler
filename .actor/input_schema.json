@@ -54,13 +54,13 @@
             "editor": "textarea"
         },
         "searchSort": {
-            "title": "Search sort",
-            "description": "Sorting preference for keyword search when Threads exposes it in the page.",
+            "title": "Search tab",
+            "description": "Threads keyword search tab to crawl: most relevant, recent, or profiles.",
             "type": "string",
             "editor": "select",
             "default": "top",
-            "enum": ["top", "latest"],
-            "enumTitles": ["Top", "Latest"]
+            "enum": ["top", "latest", "profiles"],
+            "enumTitles": ["Most relevant", "Recent", "Profiles"]
         },
         "startDate": {
             "title": "Start date",

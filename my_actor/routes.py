@@ -317,6 +317,43 @@ async def _extract_post_urls(context: PlaywrightCrawlingContext) -> list[str]:
     return [url for url in post_urls if isinstance(url, str)]
 
 
+async def _extract_profile_results(context: PlaywrightCrawlingContext) -> list[dict[str, str | None]]:
+    profiles = await context.page.evaluate(
+        r"""() => {
+            const byUrl = new Map();
+            for (const element of document.querySelectorAll('a[href]')) {
+                let url;
+                try {
+                    url = new URL(element.getAttribute('href'), window.location.origin);
+                } catch {
+                    continue;
+                }
+
+                if (!/^https:\/\/(www\.)?threads\.(com|net)$/.test(url.origin)) {
+                    continue;
+                }
+                if (!/^\/@[^/]+\/?$/.test(url.pathname)) {
+                    continue;
+                }
+
+                const profileUrl = `${url.origin}${url.pathname.replace(/\/$/, '')}`;
+                const username = url.pathname.replace(/^\/@/, '').replace(/\/$/, '');
+                const text = (element.innerText || element.getAttribute('aria-label') || '').trim();
+                if (!byUrl.has(profileUrl)) {
+                    byUrl.set(profileUrl, { username, url: profileUrl, text: text || null });
+                }
+            }
+
+            return Array.from(byUrl.values());
+        }"""
+    )
+    return [
+        profile
+        for profile in profiles
+        if isinstance(profile, dict) and isinstance(profile.get('url'), str)
+    ]
+
+
 def _attach_post_urls(posts: list[dict[str, object]], post_urls: list[str]) -> None:
     for post, post_url in zip(posts, post_urls, strict=False):
         post['post_url'] = post_url
@@ -349,7 +386,10 @@ async def default_handler(context: PlaywrightCrawlingContext) -> None:
         profile = _parse_profile(lines)
     else:
         profile = _empty_profile()
-    posts = _parse_posts(lines, profile['username'], user_data, scraped_at)
+    if user_data.get('mode') == 'search' and user_data.get('searchSort') == 'profiles':
+        posts = []
+    else:
+        posts = _parse_posts(lines, profile['username'], user_data, scraped_at)
     post_urls = await _extract_post_urls(context)
     _attach_post_urls(posts, post_urls)
 
@@ -362,6 +402,9 @@ async def default_handler(context: PlaywrightCrawlingContext) -> None:
         'profile': profile,
         'posts': posts,
     }
+
+    if user_data.get('mode') == 'search' and user_data.get('searchSort') == 'profiles':
+        data['profiles'] = await _extract_profile_results(context)
 
     if user_data.get('includeRawText'):
         data['raw_visible_text'] = body_text

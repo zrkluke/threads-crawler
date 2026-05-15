@@ -10,6 +10,11 @@ from .routes import router
 
 
 THREADS_BASE_URL = 'https://www.threads.com'
+SEARCH_FILTER_BY_SORT = {
+    'top': None,
+    'latest': 'recent',
+    'profiles': 'profiles',
+}
 
 
 def _split_bulk(value: str | None, *, split_spaces: bool = False) -> list[str]:
@@ -48,16 +53,25 @@ def _urls_from_request_list(items: list[dict[str, str]] | None) -> list[str]:
     return [item['url'] for item in items or [] if item.get('url')]
 
 
+def _build_search_url(keyword: str, search_sort: str) -> str:
+    url = f'{THREADS_BASE_URL}/search?q={quote(keyword)}&serp_type=default'
+    search_filter = SEARCH_FILTER_BY_SORT.get(search_sort)
+    if search_filter:
+        url = f'{url}&filter={search_filter}'
+    return url
+
+
 def _build_requests(actor_input: dict) -> list[Request]:
     mode = actor_input.get('mode', 'profile')
     max_posts_per_account = min(int(actor_input.get('maxPostsPerAccount') or actor_input.get('maxItems') or 10), 100)
+    search_sort = actor_input.get('searchSort', 'top')
     common_user_data = {
         'mode': mode,
         'startDate': actor_input.get('startDate'),
         'endDate': actor_input.get('endDate'),
         'relativeDate': actor_input.get('relativeDate'),
         'includeRawText': bool(actor_input.get('includeRawText')),
-        'searchSort': actor_input.get('searchSort', 'top'),
+        'searchSort': search_sort,
         'maxPostsPerAccount': max_posts_per_account,
     }
 
@@ -88,7 +102,7 @@ def _build_requests(actor_input: dict) -> list[Request]:
         for keyword in _dedupe([value.strip() for value in keywords if value.strip()]):
             requests.append(
                 Request.from_url(
-                    f'{THREADS_BASE_URL}/search?q={quote(keyword)}&serp_type=default',
+                    _build_search_url(keyword, search_sort),
                     user_data={**common_user_data, 'target': keyword},
                 )
             )

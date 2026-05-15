@@ -116,6 +116,12 @@ Or use `bulkAccounts`:
 }
 ```
 
+`searchSort` maps to Threads search tabs:
+
+- `top` -> `serp_type=default`
+- `latest` -> `serp_type=default&filter=recent`
+- `profiles` -> `serp_type=default&filter=profiles` and returns profile search results in `profiles`
+
 ### Single Thread Mode
 
 ```json
