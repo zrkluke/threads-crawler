@@ -78,7 +78,7 @@ def _build_requests(actor_input: dict) -> list[Request]:
         for tag in _dedupe([_normalize_tag(value) for value in tags if value]):
             requests.append(
                 Request.from_url(
-                    f'{THREADS_BASE_URL}/t/{tag}',
+                    f'{THREADS_BASE_URL}/search?q={quote(tag)}',
                     user_data={**common_user_data, 'target': tag},
                 )
             )
