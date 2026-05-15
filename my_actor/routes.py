@@ -11,13 +11,60 @@ from crawlee.router import Router
 
 router = Router[PlaywrightCrawlingContext]()
 
+PROFILE_TABS = {'Threads', 'Replies', 'Media', 'Reposts'}
+GLOBAL_STOP_MARKERS = {
+    'Log in',
+    'Log in or sign up for Threads',
+    'See what people are talking about and join the conversation.',
+}
+NON_AUTHOR_LINES = {
+    *PROFILE_TABS,
+    'Follow',
+    'Following',
+    'Mention',
+    'Search',
+    'Top',
+    'Latest',
+    'For you',
+    'Translate',
+    'Threads',
+    'Post',
+    'Reply',
+    'Repost',
+    'Share',
+    'Like',
+    'View',
+    'More',
+}
+
 
 def _clean_lines(text: str) -> list[str]:
     return [line.strip() for line in text.splitlines() if line.strip()]
 
 
 def _looks_like_post_time(value: str) -> bool:
-    return value.endswith(('s', 'm', 'h', 'd', 'w')) or value in {'now', 'yesterday'}
+    normalized = value.strip().lower()
+    return (
+        bool(re.fullmatch(r'\d+\s*[smhdw]', normalized))
+        or bool(re.fullmatch(r'\d{1,2}/\d{1,2}/\d{2,4}', normalized))
+        or bool(re.fullmatch(r'\d{4}-\d{1,2}-\d{1,2}', normalized))
+        or normalized in {'now', 'yesterday'}
+    )
+
+
+def _is_metric_line(value: str) -> bool:
+    return bool(re.fullmatch(r'[\d,.]+\s*[KMB]?', value.strip(), flags=re.IGNORECASE))
+
+
+def _looks_like_author(value: str) -> bool:
+    normalized = value.strip()
+    if not normalized or normalized in NON_AUTHOR_LINES:
+        return False
+    if normalized in GLOBAL_STOP_MARKERS:
+        return False
+    if _looks_like_post_time(normalized) or _is_metric_line(normalized):
+        return False
+    return len(normalized) <= 80
 
 
 def _parse_relative_datetime(value: str, scraped_at: datetime) -> str | None:
@@ -26,6 +73,12 @@ def _parse_relative_datetime(value: str, scraped_at: datetime) -> str | None:
         return scraped_at.isoformat()
     if normalized == 'yesterday':
         return (scraped_at - timedelta(days=1)).isoformat()
+
+    for date_format in ('%m/%d/%y', '%m/%d/%Y', '%Y-%m-%d'):
+        try:
+            return datetime.strptime(normalized, date_format).replace(tzinfo=UTC).isoformat()
+        except ValueError:
+            pass
 
     match = re.fullmatch(r'(\d+)\s*([smhdw])', normalized)
     if not match:
@@ -127,7 +180,7 @@ def _parse_profile(lines: list[str]) -> dict[str, str | None]:
 
     content_start = 0
     for index, line in enumerate(lines):
-        if line in {'Threads', 'Replies', 'Media', 'Reposts'}:
+        if line in PROFILE_TABS:
             content_start = index + 1
             break
 
@@ -147,30 +200,47 @@ def _parse_profile(lines: list[str]) -> dict[str, str | None]:
         if '.' in line and ' ' not in line and not profile['external_url']:
             profile['external_url'] = line
             continue
-        if line not in {'Follow', 'Mention', 'Threads', 'Replies', 'Media', 'Reposts'}:
+        if line not in {'Follow', 'Mention', *PROFILE_TABS}:
             bio_lines.append(line)
 
     profile['bio'] = '\n'.join(bio_lines) or None
     return profile
 
 
-def _parse_posts(lines: list[str], username: str | None, user_data: dict, scraped_at: datetime) -> list[dict[str, object]]:
-    if not username:
-        return []
+def _find_post_start(lines: list[str], index: int, username: str | None, profile_only: bool) -> tuple[str, str, int] | None:
+    if index >= len(lines) or not _looks_like_author(lines[index]):
+        return None
+    if profile_only and lines[index] != username:
+        return None
 
+    if index + 1 < len(lines) and _looks_like_post_time(lines[index + 1]):
+        return lines[index], lines[index + 1], index + 2
+
+    has_display_name = (
+        not profile_only
+        and index + 2 < len(lines)
+        and _looks_like_author(lines[index + 1])
+        and _looks_like_post_time(lines[index + 2])
+    )
+    if has_display_name:
+        return lines[index], lines[index + 2], index + 3
+
+    return None
+
+
+def _parse_posts(lines: list[str], username: str | None, user_data: dict, scraped_at: datetime) -> list[dict[str, object]]:
     max_posts = int(user_data.get('maxPostsPerAccount') or 10)
+    mode = user_data.get('mode')
+    profile_only = mode == 'profile' and bool(username)
 
     try:
-        start = max(lines.index(tab) for tab in ('Threads', 'Replies', 'Media', 'Reposts') if tab in lines) + 1
+        start = max(lines.index(tab) for tab in PROFILE_TABS if tab in lines) + 1
     except ValueError:
         start = 0
 
-    stop_markers = {
-        f'Log in to see more from {username}.',
-        'Log in',
-        'Log in or sign up for Threads',
-        'See what people are talking about and join the conversation.',
-    }
+    stop_markers = set(GLOBAL_STOP_MARKERS)
+    if username:
+        stop_markers.add(f'Log in to see more from {username}.')
 
     posts: list[dict[str, object]] = []
     index = start
@@ -178,27 +248,16 @@ def _parse_posts(lines: list[str], username: str | None, user_data: dict, scrape
         if lines[index] in stop_markers:
             break
 
-        is_post_start = (
-            lines[index] == username
-            and index + 1 < len(lines)
-            and _looks_like_post_time(lines[index + 1])
-        )
-        if not is_post_start:
+        post_start = _find_post_start(lines, index, username, profile_only)
+        if not post_start:
             index += 1
             continue
 
-        author = lines[index]
-        posted_at = lines[index + 1]
-        index += 2
+        author, posted_at, index = post_start
 
         content_lines: list[str] = []
         while index < len(lines) and lines[index] != 'Translate':
-            next_post_starts = (
-                lines[index] == username
-                and index + 1 < len(lines)
-                and _looks_like_post_time(lines[index + 1])
-            )
-            if next_post_starts and content_lines:
+            if _find_post_start(lines, index, username, profile_only) and content_lines:
                 break
             if lines[index] in stop_markers:
                 break
@@ -210,16 +269,16 @@ def _parse_posts(lines: list[str], username: str | None, user_data: dict, scrape
 
         metrics: list[str] = []
         while index < len(lines):
-            next_post_starts = (
-                lines[index] == username
-                and index + 1 < len(lines)
-                and _looks_like_post_time(lines[index + 1])
-            )
-            if next_post_starts or lines[index] in stop_markers:
+            if _find_post_start(lines, index, username, profile_only) or lines[index] in stop_markers:
                 break
-            if lines[index].replace(',', '').isdigit():
+            if _is_metric_line(lines[index]):
                 metrics.append(lines[index])
             index += 1
+
+        trailing_metrics: list[str] = []
+        while content_lines and _is_metric_line(content_lines[-1]):
+            trailing_metrics.insert(0, content_lines.pop())
+        metrics = trailing_metrics + metrics
 
         posted_at_iso = _parse_relative_datetime(posted_at, scraped_at)
         if _is_in_date_range(posted_at_iso, user_data, scraped_at):
@@ -263,6 +322,16 @@ def _attach_post_urls(posts: list[dict[str, object]], post_urls: list[str]) -> N
         post['post_url'] = post_url
 
 
+def _empty_profile() -> dict[str, str | None]:
+    return {
+        'username': None,
+        'display_name': None,
+        'bio': None,
+        'external_url': None,
+        'followers': None,
+    }
+
+
 @router.default_handler
 async def default_handler(context: PlaywrightCrawlingContext) -> None:
     """Handle each request by extracting visible Threads profile data."""
@@ -276,7 +345,10 @@ async def default_handler(context: PlaywrightCrawlingContext) -> None:
 
     body_text = await context.page.locator('body').inner_text()
     lines = _clean_lines(body_text)
-    profile = _parse_profile(lines)
+    if user_data.get('mode') == 'profile':
+        profile = _parse_profile(lines)
+    else:
+        profile = _empty_profile()
     posts = _parse_posts(lines, profile['username'], user_data, scraped_at)
     post_urls = await _extract_post_urls(context)
     _attach_post_urls(posts, post_urls)
