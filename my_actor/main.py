@@ -88,7 +88,7 @@ def _build_requests(actor_input: dict) -> list[Request]:
         for keyword in _dedupe([value.strip() for value in keywords if value.strip()]):
             requests.append(
                 Request.from_url(
-                    f'{THREADS_BASE_URL}/search?q={quote(keyword)}',
+                    f'{THREADS_BASE_URL}/search?q={quote(keyword)}&serp_type=default',
                     user_data={**common_user_data, 'target': keyword},
                 )
             )
