@@ -17,8 +17,10 @@ GLOBAL_STOP_MARKERS = {
     'Log in or sign up for Threads',
     'See what people are talking about and join the conversation.',
 }
+TRANSLATE_MARKERS = {'Translate', '翻譯', '翻译'}
 NON_AUTHOR_LINES = {
     *PROFILE_TABS,
+    *TRANSLATE_MARKERS,
     'Follow',
     'Following',
     'Mention',
@@ -26,7 +28,6 @@ NON_AUTHOR_LINES = {
     'Top',
     'Latest',
     'For you',
-    'Translate',
     'Threads',
     'Post',
     'Reply',
@@ -48,9 +49,10 @@ def _looks_like_post_time(value: str) -> bool:
     normalized = value.strip().lower()
     return (
         bool(re.fullmatch(r'\d+\s*[smhdw]', normalized))
+        or bool(re.fullmatch(r'\d+\s*(秒|分鐘|分|小時|天|日|週|周|月|年)', normalized))
         or bool(re.fullmatch(r'\d{1,2}/\d{1,2}/\d{2,4}', normalized))
         or bool(re.fullmatch(r'\d{4}-\d{1,2}-\d{1,2}', normalized))
-        or normalized in {'now', 'yesterday'}
+        or normalized in {'now', 'yesterday', '現在', '昨天'}
     )
 
 
@@ -69,18 +71,21 @@ def _looks_like_author(value: str) -> bool:
     return len(normalized) <= 80
 
 
-def _matches_language_filter(text: str, language_filter: object) -> bool:
-    if language_filter in {None, '', 'any'}:
+def _matches_post_language_filter(text: str, post_language_filter: object) -> bool:
+    if post_language_filter in {None, '', 'any'}:
         return True
 
-    if language_filter != 'traditionalChinese':
+    if post_language_filter != 'traditionalChinese':
         return True
 
     normalized = text.strip()
-    if not CJK_PATTERN.search(normalized):
+    content_without_ui_labels = '\n'.join(
+        line for line in normalized.splitlines() if line.strip() not in TRANSLATE_MARKERS
+    )
+    if not CJK_PATTERN.search(content_without_ui_labels):
         return False
 
-    simplified_hits = sum(1 for char in normalized if char in SIMPLIFIED_CHINESE_MARKERS)
+    simplified_hits = sum(1 for char in content_without_ui_labels if char in SIMPLIFIED_CHINESE_MARKERS)
     return simplified_hits == 0
 
 
@@ -88,7 +93,11 @@ def _parse_relative_datetime(value: str, scraped_at: datetime) -> str | None:
     normalized = value.strip().lower()
     if normalized == 'now':
         return scraped_at.isoformat()
+    if normalized == '現在':
+        return scraped_at.isoformat()
     if normalized == 'yesterday':
+        return (scraped_at - timedelta(days=1)).isoformat()
+    if normalized == '昨天':
         return (scraped_at - timedelta(days=1)).isoformat()
 
     for date_format in ('%m/%d/%y', '%m/%d/%Y', '%Y-%m-%d'):
@@ -98,19 +107,39 @@ def _parse_relative_datetime(value: str, scraped_at: datetime) -> str | None:
             pass
 
     match = re.fullmatch(r'(\d+)\s*([smhdw])', normalized)
+    if match:
+        amount = int(match.group(1))
+        unit = match.group(2)
+        delta_by_unit = {
+            's': timedelta(seconds=amount),
+            'm': timedelta(minutes=amount),
+            'h': timedelta(hours=amount),
+            'd': timedelta(days=amount),
+            'w': timedelta(weeks=amount),
+        }
+        return (scraped_at - delta_by_unit[unit]).isoformat()
+
+    match = re.fullmatch(r'(\d+)\s*(秒|分鐘|分|小時|天|日|週|周|月|年)', normalized)
     if not match:
         return None
 
     amount = int(match.group(1))
     unit = match.group(2)
-    delta_by_unit = {
-        's': timedelta(seconds=amount),
-        'm': timedelta(minutes=amount),
-        'h': timedelta(hours=amount),
-        'd': timedelta(days=amount),
-        'w': timedelta(weeks=amount),
-    }
-    return (scraped_at - delta_by_unit[unit]).isoformat()
+    if unit == '秒':
+        delta = timedelta(seconds=amount)
+    elif unit in {'分鐘', '分'}:
+        delta = timedelta(minutes=amount)
+    elif unit == '小時':
+        delta = timedelta(hours=amount)
+    elif unit in {'天', '日'}:
+        delta = timedelta(days=amount)
+    elif unit in {'週', '周'}:
+        delta = timedelta(weeks=amount)
+    elif unit == '月':
+        delta = timedelta(days=amount * 30)
+    else:
+        delta = timedelta(days=amount * 365)
+    return (scraped_at - delta).isoformat()
 
 
 def _parse_relative_window(value: str | None, scraped_at: datetime) -> datetime | None:
@@ -273,7 +302,7 @@ def _parse_posts(lines: list[str], username: str | None, user_data: dict, scrape
         author, posted_at, index = post_start
 
         content_lines: list[str] = []
-        while index < len(lines) and lines[index] != 'Translate':
+        while index < len(lines) and lines[index] not in TRANSLATE_MARKERS:
             if _find_post_start(lines, index, username, profile_only) and content_lines:
                 break
             if lines[index] in stop_markers:
@@ -281,7 +310,7 @@ def _parse_posts(lines: list[str], username: str | None, user_data: dict, scrape
             content_lines.append(lines[index])
             index += 1
 
-        if index < len(lines) and lines[index] == 'Translate':
+        if index < len(lines) and lines[index] in TRANSLATE_MARKERS:
             index += 1
 
         metrics: list[str] = []
@@ -300,7 +329,7 @@ def _parse_posts(lines: list[str], username: str | None, user_data: dict, scrape
         posted_at_iso = _parse_relative_datetime(posted_at, scraped_at)
         if _is_in_date_range(posted_at_iso, user_data, scraped_at):
             text = '\n'.join(content_lines)
-            if not _matches_language_filter(text, user_data.get('languageFilter')):
+            if not _matches_post_language_filter(text, user_data.get('postLanguageFilter')):
                 continue
 
             posts.append(
@@ -318,24 +347,96 @@ def _parse_posts(lines: list[str], username: str | None, user_data: dict, scrape
     return posts
 
 
-async def _extract_post_urls(context: PlaywrightCrawlingContext) -> list[str]:
-    post_urls = await context.page.evaluate(
+async def _extract_dom_posts(
+    context: PlaywrightCrawlingContext,
+    user_data: dict,
+    scraped_at: datetime,
+) -> list[dict[str, object]]:
+    cards = await context.page.evaluate(
         r"""() => {
-            const urls = Array.from(document.querySelectorAll('a[href]'))
-                .map((element) => {
-                    try {
-                        return new URL(element.getAttribute('href'), window.location.origin).href;
-                    } catch {
+            const postUrlPattern = /^https:\/\/(www\.)?threads\.(com|net)\/@[^/]+\/post\/[^/?#]+/;
+            const seen = new Set();
+            const cards = [];
+
+            const normalizePostUrl = (href) => {
+                try {
+                    const url = new URL(href, window.location.origin);
+                    if (!postUrlPattern.test(url.href)) {
                         return null;
                     }
-                })
-                .filter((url) => url && /^https:\/\/(www\.)?threads\.(com|net)\/@[^/]+\/post\/[^/?#]+/.test(url))
-                .map((url) => url.replace(/[?#].*$/, ''));
+                    return url.href.replace(/[?#].*$/, '');
+                } catch {
+                    return null;
+                }
+            };
 
-            return Array.from(new Set(urls));
+            const candidateLinks = Array.from(document.querySelectorAll('a[href]'))
+                .map((element) => ({ element, url: normalizePostUrl(element.getAttribute('href')) }))
+                .filter((item) => item.url);
+
+            for (const { element, url } of candidateLinks) {
+                if (seen.has(url)) {
+                    continue;
+                }
+
+                let fallbackText = null;
+                let node = element;
+                for (let depth = 0; node && depth < 10; depth += 1, node = node.parentElement) {
+                    const text = (node.innerText || '').trim();
+                    if (!text) {
+                        continue;
+                    }
+
+                    const lines = text.split('\n').map((line) => line.trim()).filter(Boolean);
+                    if (lines.length < 4 || lines.length > 80) {
+                        continue;
+                    }
+                    if (text.includes('Log in or sign up for Threads')) {
+                        continue;
+                    }
+
+                    const postLinkCount = Array.from(node.querySelectorAll('a[href]'))
+                        .map((link) => normalizePostUrl(link.getAttribute('href')))
+                        .filter(Boolean).length;
+
+                    if (postLinkCount === 1) {
+                        cards.push({ url, text });
+                        seen.add(url);
+                        break;
+                    }
+
+                    if (!fallbackText) {
+                        fallbackText = text;
+                    }
+                }
+
+                if (!seen.has(url) && fallbackText) {
+                    cards.push({ url, text: fallbackText });
+                    seen.add(url);
+                }
+            }
+
+            return cards;
         }"""
     )
-    return [url for url in post_urls if isinstance(url, str)]
+
+    max_posts = int(user_data.get('maxPostsPerAccount') or 10)
+    posts: list[dict[str, object]] = []
+    for card in cards:
+        if not isinstance(card, dict) or not isinstance(card.get('url'), str) or not isinstance(card.get('text'), str):
+            continue
+
+        parsed = _parse_posts(_clean_lines(card['text']), None, {**user_data, 'maxPostsPerAccount': 1}, scraped_at)
+        if not parsed:
+            continue
+
+        post = parsed[0]
+        post['post_url'] = card['url']
+        posts.append(post)
+        if len(posts) >= max_posts:
+            break
+
+    return posts
 
 
 async def _extract_profile_results(context: PlaywrightCrawlingContext) -> list[dict[str, str | None]]:
@@ -375,11 +476,6 @@ async def _extract_profile_results(context: PlaywrightCrawlingContext) -> list[d
     ]
 
 
-def _attach_post_urls(posts: list[dict[str, object]], post_urls: list[str]) -> None:
-    for post, post_url in zip(posts, post_urls, strict=False):
-        post['post_url'] = post_url
-
-
 def _empty_profile() -> dict[str, str | None]:
     return {
         'username': None,
@@ -410,9 +506,9 @@ async def default_handler(context: PlaywrightCrawlingContext) -> None:
     if user_data.get('mode') == 'search' and user_data.get('searchSort') == 'profiles':
         posts = []
     else:
-        posts = _parse_posts(lines, profile['username'], user_data, scraped_at)
-    post_urls = await _extract_post_urls(context)
-    _attach_post_urls(posts, post_urls)
+        posts = await _extract_dom_posts(context, user_data, scraped_at)
+        if not posts:
+            posts = _parse_posts(lines, profile['username'], user_data, scraped_at)
 
     data = {
         'url': context.request.url,

@@ -4,6 +4,8 @@ An Apify Actor for scraping publicly visible Threads pages with Python, Crawlee,
 
 The Actor is designed for local development and Apify deployment through GitHub. It loads dynamic Threads pages in a Camoufox browser, extracts visible profile and post data, and stores structured results in an Apify dataset.
 
+The browser context defaults to Traditional Chinese / Taiwan signals (`zh-TW`, `Asia/Taipei`, and `Accept-Language: zh-TW`) so unauthenticated Threads search is closer to a Traditional Chinese browsing session.
+
 ## Features
 
 - Crawl publicly visible Threads profile pages.
@@ -48,6 +50,7 @@ Because of that:
 - Some metrics may be `null` if Threads does not expose them publicly.
 - ISO timestamps are estimated from relative timestamps such as `12h`, `1d`, or `3w` using the scrape time.
 - Post URLs are extracted best-effort from public page links. If Threads hides or changes those links, `posts[].post_url` can be empty.
+- `posts[].post_url` is extracted from the same visible DOM card as the post text. The Actor avoids attaching unrelated post links when a card cannot be matched.
 - Permanent IDs and deeper media metadata may require additional parser work.
 - Threads page structure can change, which may require selector/parser updates.
 - Camoufox reduces common automation fingerprints, but it does not guarantee access or bypass platform limits.
@@ -112,7 +115,7 @@ Or use `bulkAccounts`:
 {
   "mode": "search",
   "keywordsOrTags": ["AI agent", "Crawlee"],
-  "searchSort": "top",
+  "searchSort": "latest",
   "maxPostsPerAccount": 10
 }
 ```
@@ -174,19 +177,21 @@ You can also use absolute dates:
 
 Date filtering is best-effort because public Threads pages often expose only relative timestamps.
 
-### Language Filter
+For `search` and `tag` modes, the Actor defaults to `"relativeDate": "7 days"` when no date filter is provided, so Recent search results do not include old posts that Threads mixes into the page.
 
-By default, extracted posts are filtered to Traditional Chinese:
+### Post Language Filter
+
+By default, extracted posts are filtered to Traditional Chinese after Threads returns the page. This is not a Threads URL parameter.
 
 ```json
 {
   "mode": "search",
   "keywordsOrTags": ["claude code"],
-  "languageFilter": "traditionalChinese"
+  "postLanguageFilter": "traditionalChinese"
 }
 ```
 
-Use `"languageFilter": "any"` to keep posts in any language.
+Use `"postLanguageFilter": "any"` to keep posts in any language.
 
 ## Output
 

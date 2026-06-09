@@ -58,7 +58,7 @@
             "description": "Threads keyword search tab to crawl: most relevant, recent, or profiles.",
             "type": "string",
             "editor": "select",
-            "default": "top",
+            "default": "latest",
             "enum": ["top", "latest", "profiles"],
             "enumTitles": ["Most relevant", "Recent", "Profiles"]
         },
@@ -80,11 +80,12 @@
             "description": "Optional relative date window, for example: 7 days, 1 month, 24 hours.",
             "type": "string",
             "editor": "textfield",
+            "default": "7 days",
             "prefill": "7 days"
         },
-        "languageFilter": {
-            "title": "Language filter",
-            "description": "Filter extracted posts by language. Traditional Chinese is the default.",
+        "postLanguageFilter": {
+            "title": "Post language filter",
+            "description": "Post-processing filter for extracted posts. This is not a Threads URL parameter. Traditional Chinese is the default.",
             "type": "string",
             "editor": "select",
             "default": "traditionalChinese",

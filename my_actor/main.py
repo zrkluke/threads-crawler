@@ -10,10 +10,18 @@ from .routes import router
 
 
 THREADS_BASE_URL = 'https://www.threads.com'
+RECENT_SEARCH_DEFAULT_RELATIVE_DATE = '7 days'
 SEARCH_FILTER_BY_SORT = {
     'top': None,
     'latest': 'recent',
     'profiles': 'profiles',
+}
+ZH_TW_CONTEXT_OPTIONS = {
+    'locale': 'zh-TW',
+    'timezone_id': 'Asia/Taipei',
+    'extra_http_headers': {
+        'Accept-Language': 'zh-TW,zh;q=0.9,en-US;q=0.6,en;q=0.4',
+    },
 }
 
 
@@ -64,13 +72,17 @@ def _build_search_url(keyword: str, search_sort: str) -> str:
 def _build_requests(actor_input: dict) -> list[Request]:
     mode = actor_input.get('mode', 'profile')
     max_posts_per_account = min(int(actor_input.get('maxPostsPerAccount') or actor_input.get('maxItems') or 10), 100)
-    search_sort = actor_input.get('searchSort', 'top')
+    search_sort = actor_input.get('searchSort', 'latest')
+    post_language_filter = actor_input.get('postLanguageFilter', actor_input.get('languageFilter', 'traditionalChinese'))
+    relative_date = actor_input.get('relativeDate')
+    if mode in {'search', 'tag'} and not relative_date and not actor_input.get('startDate') and not actor_input.get('endDate'):
+        relative_date = RECENT_SEARCH_DEFAULT_RELATIVE_DATE
     common_user_data = {
         'mode': mode,
         'startDate': actor_input.get('startDate'),
         'endDate': actor_input.get('endDate'),
-        'relativeDate': actor_input.get('relativeDate'),
-        'languageFilter': actor_input.get('languageFilter', 'traditionalChinese'),
+        'relativeDate': relative_date,
+        'postLanguageFilter': post_language_filter,
         'includeRawText': bool(actor_input.get('includeRawText')),
         'searchSort': search_sort,
         'maxPostsPerAccount': max_posts_per_account,
@@ -156,7 +168,7 @@ async def main() -> None:
         crawler = PlaywrightCrawler(
             # Limit the crawl to max requests. Remove or increase it for crawling all links.
             max_requests_per_crawl=len(requests),
-            browser_pool=BrowserPool(plugins=[CamoufoxPlugin()]),
+            browser_pool=BrowserPool(plugins=[CamoufoxPlugin(browser_new_context_options=ZH_TW_CONTEXT_OPTIONS)]),
             # Set the request handler to the request router defined in routes.py.
             request_handler=router,
         )
