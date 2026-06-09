@@ -3,9 +3,9 @@ from urllib.parse import quote
 
 from apify import Actor
 from camoufox import AsyncNewBrowser
-from crawlee import Request
+from crawlee import ConcurrencySettings, Request
 from crawlee.browsers import BrowserPool, PlaywrightBrowserController, PlaywrightBrowserPlugin
-from crawlee.crawlers import PlaywrightCrawler
+from crawlee.crawlers import PlaywrightCrawler, PlaywrightPreNavCrawlingContext
 
 from .routes import router
 
@@ -177,10 +177,19 @@ async def main() -> None:
         crawler = PlaywrightCrawler(
             # Limit the crawl to max requests. Remove or increase it for crawling all links.
             max_requests_per_crawl=len(requests),
+            concurrency_settings=ConcurrencySettings(
+                min_concurrency=1,
+                max_concurrency=1,
+                desired_concurrency=1,
+            ),
             browser_pool=BrowserPool(plugins=[CamoufoxPlugin(browser_new_context_options=ZH_TW_CONTEXT_OPTIONS)]),
             # Set the request handler to the request router defined in routes.py.
             request_handler=router,
         )
+
+        @crawler.pre_navigation_hook
+        async def block_static_assets(context: PlaywrightPreNavCrawlingContext) -> None:
+            await context.block_requests()
 
         # Run the crawler with the starting requests.
         await crawler.run(requests)

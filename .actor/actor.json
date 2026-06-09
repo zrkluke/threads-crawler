@@ -8,7 +8,7 @@
 	"buildTag": "latest",
 	"meta": {
 		"templateId": "python-crawlee-playwright-camoufox",
-		"generatedBy": "<FILL-IN-MODEL>"
+		"generatedBy": "Codex with GPT-5"
 	},
 	"input": "./input_schema.json",
 	"output": "./output_schema.json",
