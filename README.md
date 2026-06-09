@@ -259,6 +259,7 @@ Install dependencies:
 
 ```bash
 python -m pip install -r requirements.txt
+python -m pip install -r requirements-dev.txt
 ```
 
 Run locally:
@@ -266,6 +267,20 @@ Run locally:
 ```bash
 apify run --purge
 ```
+
+Run local quality checks:
+
+```powershell
+.\scripts\verify.ps1
+```
+
+Enable the pre-commit hook:
+
+```bash
+pre-commit install
+```
+
+The pre-commit hook runs Ruff lint, Ruff format check, and mypy before commits. Use `scripts/verify.ps1` as the same post-edit verification command in your editor or agent workflow.
 
 Local test input is stored in:
 
