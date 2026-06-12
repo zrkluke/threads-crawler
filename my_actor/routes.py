@@ -565,13 +565,15 @@ async def _extract_dom_posts(
                         .map((link) => normalizePostUrl(link.getAttribute('href')))
                         .filter(Boolean)));
 
-                    if (postUrls.length === 1 && postUrls[0] === url) {
+                    if (postUrls.length >= 1 && postUrls[0] === url) {
                         const article = element.closest('[role="article"]');
                         const contextText = article && isVisible(article)
                             ? (article.innerText || '').trim()
                             : text;
                         cards.push({ url, text, contextText });
-                        seen.add(url);
+                        for (const pUrl of postUrls) {
+                            seen.add(pUrl);
+                        }
                         break;
                     }
                 }
