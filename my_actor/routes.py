@@ -369,6 +369,70 @@ def _profile_replies_url(profile_url: str, username: str) -> str:
     return f"{parsed_url.scheme}://{parsed_url.netloc}/@{username}/replies"
 
 
+def _same_post_text(left: object, right: object) -> bool:
+    if not isinstance(left, str) or not isinstance(right, str):
+        return False
+
+    normalized_left = left.strip()
+    normalized_right = right.strip()
+    return bool(
+        normalized_left
+        and normalized_right
+        and (
+            normalized_left == normalized_right
+            or normalized_left in normalized_right
+            or normalized_right in normalized_left
+        )
+    )
+
+
+def _merge_text_posts_with_dom_posts(
+    text_posts: list[dict[str, object]],
+    dom_posts: list[dict[str, object]],
+    max_posts: int,
+) -> list[dict[str, object]]:
+    merged_posts = [dict(post) for post in text_posts]
+    used_dom_indexes: set[int] = set()
+
+    for text_post in merged_posts:
+        if text_post.get("post_url"):
+            continue
+
+        for index, dom_post in enumerate(dom_posts):
+            if index in used_dom_indexes:
+                continue
+            if text_post.get("author") != dom_post.get("author"):
+                continue
+            if text_post.get("posted_at") != dom_post.get("posted_at"):
+                continue
+            if not _same_post_text(text_post.get("text"), dom_post.get("text")):
+                continue
+            post_url = dom_post.get("post_url")
+            if isinstance(post_url, str):
+                text_post["post_url"] = post_url
+            used_dom_indexes.add(index)
+            break
+
+    seen_post_urls = {post.get("post_url") for post in merged_posts if isinstance(post.get("post_url"), str)}
+    seen_texts = [post.get("text") for post in merged_posts]
+    for index, dom_post in enumerate(dom_posts):
+        if index in used_dom_indexes:
+            continue
+        post_url = dom_post.get("post_url")
+        if isinstance(post_url, str) and post_url in seen_post_urls:
+            continue
+        if any(_same_post_text(dom_post.get("text"), text) for text in seen_texts):
+            continue
+        merged_posts.append(dom_post)
+        if isinstance(post_url, str):
+            seen_post_urls.add(post_url)
+        seen_texts.append(dom_post.get("text"))
+        if len(merged_posts) >= max_posts:
+            break
+
+    return merged_posts[:max_posts]
+
+
 def _has_reply_context(text: object) -> bool:
     if not isinstance(text, str):
         return False
@@ -455,11 +519,11 @@ async def _extract_dom_posts(
                         continue;
                     }
 
-                    const postLinkCount = Array.from(node.querySelectorAll('a[href]'))
+                    const postUrls = Array.from(new Set(Array.from(node.querySelectorAll('a[href]'))
                         .map((link) => normalizePostUrl(link.getAttribute('href')))
-                        .filter(Boolean).length;
+                        .filter(Boolean)));
 
-                    if (postLinkCount === 1) {
+                    if (postUrls.length === 1 && postUrls[0] === url) {
                         const article = element.closest('[role="article"]');
                         const contextText = article && isVisible(article)
                             ? (article.innerText || '').trim()
@@ -554,7 +618,7 @@ async def default_handler(context: PlaywrightCrawlingContext) -> None:
     """Handle each request by extracting visible Threads profile data."""
     url = context.request.url
     Actor.log.info(f"Scraping {url}...")
-    user_data = dict(context.request.user_data)
+    user_data: dict[str, Any] = dict(context.request.user_data)
     scraped_at = datetime.now(UTC)
 
     await context.page.wait_for_load_state("domcontentloaded")
@@ -572,20 +636,35 @@ async def default_handler(context: PlaywrightCrawlingContext) -> None:
         if user_data.get("mode") == "profile":
             target = user_data.get("target")
             profile_username = profile["username"] or (target if isinstance(target, str) else None)
-        posts = await _extract_dom_posts(
+        dom_posts = await _extract_dom_posts(
             context,
             user_data,
             scraped_at,
             profile_username,
             exclude_reply_context=user_data.get("mode") == "profile",
         )
-        if not posts:
-            posts = _parse_posts(lines, profile["username"], user_data, scraped_at)
+        text_posts = _parse_posts(lines, profile["username"], user_data, scraped_at)
+        if user_data.get("mode") == "profile" and text_posts:
+            posts = _merge_text_posts_with_dom_posts(
+                text_posts,
+                dom_posts,
+                int(user_data.get("maxPostsPerAccount") or 10),
+            )
+        else:
+            posts = dom_posts or text_posts
         if user_data.get("mode") == "profile" and profile_username:
             await context.page.goto(_profile_replies_url(context.request.url, profile_username))
             await context.page.wait_for_load_state("domcontentloaded")
             await context.page.wait_for_timeout(8_000)
-            replies = await _extract_dom_posts(context, user_data, scraped_at, profile_username)
+            reply_body_text = await context.page.locator("body").inner_text()
+            reply_lines = _clean_lines(reply_body_text)
+            reply_dom_posts = await _extract_dom_posts(context, user_data, scraped_at, profile_username)
+            reply_text_posts = _parse_posts(reply_lines, profile_username, user_data, scraped_at)
+            replies = _merge_text_posts_with_dom_posts(
+                reply_text_posts,
+                reply_dom_posts,
+                int(user_data.get("maxPostsPerAccount") or 10),
+            )
 
     data = {
         "url": context.request.url,
