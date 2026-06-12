@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from datetime import UTC, datetime, timedelta
 from typing import Any
+from urllib.parse import urlparse
 
 from apify import Actor
 from crawlee.crawlers import PlaywrightCrawlingContext
@@ -354,10 +355,20 @@ def _parse_posts(
     return posts
 
 
+def _post_url_username(post_url: str) -> str | None:
+    path_parts = [part for part in urlparse(post_url).path.split("/") if part]
+    if len(path_parts) < 3 or path_parts[1] != "post":
+        return None
+    if not path_parts[0].startswith("@"):
+        return None
+    return path_parts[0].removeprefix("@")
+
+
 async def _extract_dom_posts(
     context: PlaywrightCrawlingContext,
     user_data: dict[str, Any],
     scraped_at: datetime,
+    profile_username: str | None = None,
 ) -> list[dict[str, object]]:
     cards = await context.page.evaluate(
         r"""() => {
@@ -423,7 +434,17 @@ async def _extract_dom_posts(
         if not isinstance(card, dict) or not isinstance(card.get("url"), str) or not isinstance(card.get("text"), str):
             continue
 
-        parsed = _parse_posts(_clean_lines(card["text"]), None, {**user_data, "maxPostsPerAccount": 1}, scraped_at)
+        if profile_username:
+            card_username = _post_url_username(card["url"])
+            if not card_username or card_username.lower() != profile_username.lower():
+                continue
+
+        parsed = _parse_posts(
+            _clean_lines(card["text"]),
+            profile_username,
+            {**user_data, "maxPostsPerAccount": 1},
+            scraped_at,
+        )
         if not parsed:
             continue
 
@@ -496,7 +517,11 @@ async def default_handler(context: PlaywrightCrawlingContext) -> None:
     if user_data.get("mode") == "search" and user_data.get("searchSort") == "profiles":
         posts = []
     else:
-        posts = await _extract_dom_posts(context, user_data, scraped_at)
+        profile_username = None
+        if user_data.get("mode") == "profile":
+            target = user_data.get("target")
+            profile_username = profile["username"] or (target if isinstance(target, str) else None)
+        posts = await _extract_dom_posts(context, user_data, scraped_at, profile_username)
         if not posts:
             posts = _parse_posts(lines, profile["username"], user_data, scraped_at)
 
