@@ -13,7 +13,7 @@ from crawlee.router import Router
 
 router = Router[PlaywrightCrawlingContext]()
 
-PROFILE_TABS = {"Threads", "Replies", "Media", "Reposts"}
+PROFILE_TABS = {"Threads", "Replies", "Media", "Reposts", "串文", "影音內容", "轉發"}
 GLOBAL_STOP_MARKERS = {
     "Log in",
     "Log in or sign up for Threads",
@@ -280,12 +280,54 @@ def _find_post_start(
     return None
 
 
+def _find_next_post_start(lines: list[str], index: int, username: str | None, profile_only: bool) -> bool:
+    if _find_post_start(lines, index, username, profile_only):
+        return True
+    return bool(profile_only and _find_post_start(lines, index, username, False))
+
+
+def _expand_combined_author_time_lines(lines: list[str], username: str | None) -> list[str]:
+    if not username:
+        return lines
+
+    expanded_lines: list[str] = []
+    username_prefix = f"{username} "
+    for line in lines:
+        if not line.lower().startswith(username_prefix.lower()):
+            expanded_lines.append(line)
+            continue
+
+        remainder = line[len(username_prefix) :].strip()
+        if not remainder:
+            expanded_lines.append(line)
+            continue
+
+        parts = remainder.split(maxsplit=2)
+        split_values: tuple[str, str] | None = None
+        if parts and _looks_like_post_time(parts[0]):
+            split_values = (parts[0], " ".join(parts[1:]))
+        elif len(parts) >= 2 and _looks_like_post_time(f"{parts[0]} {parts[1]}"):
+            split_values = (f"{parts[0]} {parts[1]}", parts[2] if len(parts) > 2 else "")
+
+        if not split_values:
+            expanded_lines.append(line)
+            continue
+
+        posted_at, remaining_text = split_values
+        expanded_lines.extend([username, posted_at])
+        if remaining_text:
+            expanded_lines.append(remaining_text)
+
+    return expanded_lines
+
+
 def _parse_posts(
     lines: list[str], username: str | None, user_data: dict[str, Any], scraped_at: datetime
 ) -> list[dict[str, object]]:
     max_posts = int(user_data.get("maxPostsPerAccount") or 10)
     mode = user_data.get("mode")
     profile_only = mode == "profile" and bool(username)
+    lines = _expand_combined_author_time_lines(lines, username)
 
     try:
         start = max(lines.index(tab) for tab in PROFILE_TABS if tab in lines) + 1
@@ -311,7 +353,7 @@ def _parse_posts(
 
         content_lines: list[str] = []
         while index < len(lines) and lines[index] not in TRANSLATE_MARKERS:
-            if _find_post_start(lines, index, username, profile_only) and content_lines:
+            if _find_next_post_start(lines, index, username, profile_only) and content_lines:
                 break
             if lines[index] in stop_markers:
                 break
@@ -323,7 +365,7 @@ def _parse_posts(
 
         metrics: list[str] = []
         while index < len(lines):
-            if _find_post_start(lines, index, username, profile_only) or lines[index] in stop_markers:
+            if _find_next_post_start(lines, index, username, profile_only) or lines[index] in stop_markers:
                 break
             if _is_metric_line(lines[index]):
                 metrics.append(lines[index])
