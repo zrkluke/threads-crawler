@@ -25,6 +25,9 @@
             "posts": {
                 "type": "array"
             },
+            "replies": {
+                "type": "array"
+            },
             "profiles": {
                 "type": "array"
             }
@@ -34,7 +37,7 @@
         "overview": {
             "title": "Overview",
             "transformation": {
-                "fields": ["mode", "target", "url", "profile", "posts", "profiles", "scraped_at"]
+                "fields": ["mode", "target", "url", "profile", "posts", "replies", "profiles", "scraped_at"]
             },
             "display": {
                 "component": "table",
@@ -57,6 +60,10 @@
                     },
                     "posts": {
                         "label": "Posts",
+                        "format": "array"
+                    },
+                    "replies": {
+                        "label": "Replies",
                         "format": "array"
                     },
                     "profiles": {

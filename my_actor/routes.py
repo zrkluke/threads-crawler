@@ -364,17 +364,53 @@ def _post_url_username(post_url: str) -> str | None:
     return path_parts[0].removeprefix("@")
 
 
+def _profile_replies_url(profile_url: str, username: str) -> str:
+    parsed_url = urlparse(profile_url)
+    return f"{parsed_url.scheme}://{parsed_url.netloc}/@{username}/replies"
+
+
+def _has_reply_context(text: object) -> bool:
+    if not isinstance(text, str):
+        return False
+
+    return any(
+        marker in text
+        for marker in (
+            "Replying to",
+            "replied to",
+            "回覆給",
+            "回覆了",
+            "回复给",
+            "回复了",
+        )
+    )
+
+
 async def _extract_dom_posts(
     context: PlaywrightCrawlingContext,
     user_data: dict[str, Any],
     scraped_at: datetime,
     profile_username: str | None = None,
+    exclude_reply_context: bool = False,
 ) -> list[dict[str, object]]:
     cards = await context.page.evaluate(
         r"""() => {
             const postUrlPattern = /^https:\/\/(www\.)?threads\.(com|net)\/@[^/]+\/post\/[^/?#]+/;
             const seen = new Set();
             const cards = [];
+
+            const isVisible = (element) => {
+                if (!element || !element.isConnected) {
+                    return false;
+                }
+
+                const style = window.getComputedStyle(element);
+                if (style.visibility === 'hidden' || style.display === 'none' || Number(style.opacity) === 0) {
+                    return false;
+                }
+
+                return element.getClientRects().length > 0;
+            };
 
             const normalizePostUrl = (href) => {
                 try {
@@ -396,9 +432,16 @@ async def _extract_dom_posts(
                 if (seen.has(url)) {
                     continue;
                 }
+                if (!isVisible(element)) {
+                    continue;
+                }
 
                 let node = element;
                 for (let depth = 0; node && depth < 10; depth += 1, node = node.parentElement) {
+                    if (!isVisible(node)) {
+                        continue;
+                    }
+
                     const text = (node.innerText || '').trim();
                     if (!text) {
                         continue;
@@ -417,7 +460,11 @@ async def _extract_dom_posts(
                         .filter(Boolean).length;
 
                     if (postLinkCount === 1) {
-                        cards.push({ url, text });
+                        const article = element.closest('[role="article"]');
+                        const contextText = article && isVisible(article)
+                            ? (article.innerText || '').trim()
+                            : text;
+                        cards.push({ url, text, contextText });
                         seen.add(url);
                         break;
                     }
@@ -437,6 +484,8 @@ async def _extract_dom_posts(
         if profile_username:
             card_username = _post_url_username(card["url"])
             if not card_username or card_username.lower() != profile_username.lower():
+                continue
+            if exclude_reply_context and _has_reply_context(card.get("contextText")):
                 continue
 
         parsed = _parse_posts(
@@ -514,6 +563,8 @@ async def default_handler(context: PlaywrightCrawlingContext) -> None:
     body_text = await context.page.locator("body").inner_text()
     lines = _clean_lines(body_text)
     profile = _parse_profile(lines) if user_data.get("mode") == "profile" else _empty_profile()
+    title = await context.page.title()
+    replies: list[dict[str, object]] = []
     if user_data.get("mode") == "search" and user_data.get("searchSort") == "profiles":
         posts = []
     else:
@@ -521,19 +572,33 @@ async def default_handler(context: PlaywrightCrawlingContext) -> None:
         if user_data.get("mode") == "profile":
             target = user_data.get("target")
             profile_username = profile["username"] or (target if isinstance(target, str) else None)
-        posts = await _extract_dom_posts(context, user_data, scraped_at, profile_username)
+        posts = await _extract_dom_posts(
+            context,
+            user_data,
+            scraped_at,
+            profile_username,
+            exclude_reply_context=user_data.get("mode") == "profile",
+        )
         if not posts:
             posts = _parse_posts(lines, profile["username"], user_data, scraped_at)
+        if user_data.get("mode") == "profile" and profile_username:
+            await context.page.goto(_profile_replies_url(context.request.url, profile_username))
+            await context.page.wait_for_load_state("domcontentloaded")
+            await context.page.wait_for_timeout(8_000)
+            replies = await _extract_dom_posts(context, user_data, scraped_at, profile_username)
 
     data = {
         "url": context.request.url,
         "mode": user_data.get("mode"),
         "target": user_data.get("target"),
         "scraped_at": scraped_at.isoformat(),
-        "title": await context.page.title(),
+        "title": title,
         "profile": profile,
         "posts": posts,
     }
+
+    if user_data.get("mode") == "profile":
+        data["replies"] = replies
 
     if user_data.get("mode") == "search" and user_data.get("searchSort") == "profiles":
         data["profiles"] = await _extract_profile_results(context)
