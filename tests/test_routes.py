@@ -17,7 +17,6 @@ How to update fixtures:
 - Save to tests/fixtures/<account>_<page>_body.txt
 """
 
-import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -140,9 +139,7 @@ def test_translate_marker_stripped_from_real_body():
 
     posts = _parse_posts(lines, "largitdata", user_data, scraped_at)
     for post in posts:
-        assert "翻譯" not in str(post.get("text", "")), (
-            f"'翻譯' UI label found in post text: {post['text']!r}"
-        )
+        assert "翻譯" not in str(post.get("text", "")), f"'翻譯' UI label found in post text: {post['text']!r}"
 
 
 def test_login_wall_stops_parsing():
