@@ -18,6 +18,13 @@ GLOBAL_STOP_MARKERS = {
     "Log in",
     "Log in or sign up for Threads",
     "See what people are talking about and join the conversation.",
+    # Traditional Chinese login wall
+    "登入或註冊 Threads查看人們談論的主題，並加入對話。",
+    "登入或註冊 Threads",
+    "登入",
+    # Simplified Chinese login wall
+    "登录或注册 Threads",
+    "登录",
 }
 TRANSLATE_MARKERS = {"Translate", "翻譯", "翻译"}
 NON_AUTHOR_LINES = {
@@ -337,6 +344,8 @@ def _parse_posts(
     stop_markers = set(GLOBAL_STOP_MARKERS)
     if username:
         stop_markers.add(f"Log in to see more from {username}.")
+        stop_markers.add(f"登入以查看更多來自{username}的內容。")
+        stop_markers.add(f"登录以查看更多来自{username}的内容。")
 
     posts: list[dict[str, object]] = []
     index = start
@@ -657,6 +666,29 @@ def _empty_profile() -> dict[str, str | None]:
     }
 
 
+async def _save_debug_artifacts(context: PlaywrightCrawlingContext, suffix: str) -> None:
+    """Capture page screenshot and HTML page source and save them to Key-Value Store."""
+    try:
+        url_parsed = urlparse(context.request.url)
+        path_slug = url_parsed.path.strip("/").replace("/", "_").replace("@", "") or "root"
+        key_base = f"DEBUG_{path_slug}_{suffix}"
+
+        screenshot_key = f"{key_base}_screenshot"
+        html_key = f"{key_base}_html"
+
+        screenshot_png = await context.page.screenshot(full_page=False)
+        await Actor.set_value(screenshot_key, screenshot_png, content_type="image/png")
+
+        html_content = await context.page.content()
+        await Actor.set_value(html_key, html_content, content_type="text/html")
+
+        Actor.log.info(
+            f"Saved debug artifacts to Key-Value Store. Keys: '{screenshot_key}' (PNG), '{html_key}' (HTML)."
+        )
+    except Exception as e:
+        Actor.log.error(f"Failed to save debug artifacts for {suffix}: {e}")
+
+
 @router.default_handler
 async def default_handler(context: PlaywrightCrawlingContext) -> None:
     """Handle each request by extracting visible Threads profile data."""
@@ -668,65 +700,95 @@ async def default_handler(context: PlaywrightCrawlingContext) -> None:
     await context.page.wait_for_load_state("domcontentloaded")
     await context.page.wait_for_timeout(8_000)
 
-    body_text = await context.page.locator("body").inner_text()
-    lines = _clean_lines(body_text)
-    profile = _parse_profile(lines) if user_data.get("mode") == "profile" else _empty_profile()
-    title = await context.page.title()
-    replies: list[dict[str, object]] = []
-    if user_data.get("mode") == "search" and user_data.get("searchSort") == "profiles":
-        posts = []
-    else:
-        profile_username = None
-        if user_data.get("mode") == "profile":
-            target = user_data.get("target")
-            profile_username = profile["username"] or (target if isinstance(target, str) else None)
-        dom_posts = await _extract_dom_posts(
-            context,
-            user_data,
-            scraped_at,
-            profile_username,
-            exclude_reply_context=user_data.get("mode") == "profile",
-        )
-        text_posts = _parse_posts(lines, profile["username"], user_data, scraped_at)
-        if user_data.get("mode") == "profile" and text_posts:
-            posts = _merge_text_posts_with_dom_posts(
-                text_posts,
-                dom_posts,
-                int(user_data.get("maxPostsPerAccount") or 10),
-            )
+    try:
+        body_text = await context.page.locator("body").inner_text()
+        lines = _clean_lines(body_text)
+        profile = _parse_profile(lines) if user_data.get("mode") == "profile" else _empty_profile()
+        title = await context.page.title()
+
+        replies: list[dict[str, object]] = []
+        posts: list[dict[str, object]] = []
+        profiles: list[dict[str, str | None]] = []
+
+        if user_data.get("mode") == "search" and user_data.get("searchSort") == "profiles":
+            profiles = await _extract_profile_results(context)
+            if not profiles:
+                Actor.log.warning(f"No profiles extracted from search on {url}. Saving debug artifacts...")
+                await _save_debug_artifacts(context, "search_profiles_empty")
         else:
-            posts = dom_posts or text_posts
-        if user_data.get("mode") == "profile" and profile_username:
-            await context.page.goto(_profile_replies_url(context.request.url, profile_username))
-            await context.page.wait_for_load_state("domcontentloaded")
-            await context.page.wait_for_timeout(8_000)
-            reply_body_text = await context.page.locator("body").inner_text()
-            reply_lines = _clean_lines(reply_body_text)
-            reply_dom_posts = await _extract_dom_posts(context, user_data, scraped_at, profile_username)
-            reply_text_posts = _parse_posts(reply_lines, profile_username, user_data, scraped_at)
-            replies = _merge_text_posts_with_dom_posts(
-                reply_text_posts,
-                reply_dom_posts,
-                int(user_data.get("maxPostsPerAccount") or 10),
+            profile_username = None
+            if user_data.get("mode") == "profile":
+                target = user_data.get("target")
+                profile_username = profile["username"] or (target if isinstance(target, str) else None)
+
+            dom_posts = await _extract_dom_posts(
+                context,
+                user_data,
+                scraped_at,
+                profile_username,
+                exclude_reply_context=user_data.get("mode") == "profile",
             )
+            text_posts = _parse_posts(lines, profile["username"], user_data, scraped_at)
 
-    data = {
-        "url": context.request.url,
-        "mode": user_data.get("mode"),
-        "target": user_data.get("target"),
-        "scraped_at": scraped_at.isoformat(),
-        "title": title,
-        "profile": profile,
-        "posts": posts,
-    }
+            if user_data.get("mode") == "profile" and text_posts:
+                posts = _merge_text_posts_with_dom_posts(
+                    text_posts,
+                    dom_posts,
+                    int(user_data.get("maxPostsPerAccount") or 10),
+                )
+            else:
+                posts = dom_posts or text_posts
 
-    if user_data.get("mode") == "profile":
-        data["replies"] = replies
+            if not posts:
+                Actor.log.warning(f"No posts extracted from {url}. Saving debug artifacts...")
+                await _save_debug_artifacts(context, "posts_empty")
 
-    if user_data.get("mode") == "search" and user_data.get("searchSort") == "profiles":
-        data["profiles"] = await _extract_profile_results(context)
+            if user_data.get("mode") == "profile" and profile_username:
+                replies_url = _profile_replies_url(context.request.url, profile_username)
+                try:
+                    Actor.log.info(f"Navigating to replies page: {replies_url}...")
+                    await context.page.goto(replies_url)
+                    await context.page.wait_for_load_state("domcontentloaded")
+                    await context.page.wait_for_timeout(8_000)
 
-    if user_data.get("includeRawText"):
-        data["raw_visible_text"] = body_text
+                    reply_body_text = await context.page.locator("body").inner_text()
+                    reply_lines = _clean_lines(reply_body_text)
+                    reply_dom_posts = await _extract_dom_posts(context, user_data, scraped_at, profile_username)
+                    reply_text_posts = _parse_posts(reply_lines, profile_username, user_data, scraped_at)
+                    replies = _merge_text_posts_with_dom_posts(
+                        reply_text_posts,
+                        reply_dom_posts,
+                        int(user_data.get("maxPostsPerAccount") or 10),
+                    )
+                    if not replies:
+                        Actor.log.warning(f"No replies extracted for {profile_username}. Saving debug artifacts...")
+                        await _save_debug_artifacts(context, f"replies_empty_{profile_username}")
+                except Exception as e:
+                    Actor.log.exception(f"Failed to scrape replies for {profile_username} at {replies_url}: {e}")
+                    await _save_debug_artifacts(context, f"replies_failed_{profile_username}")
 
-    await context.push_data(data)
+        data: dict[str, Any] = {
+            "url": context.request.url,
+            "mode": user_data.get("mode"),
+            "target": user_data.get("target"),
+            "scraped_at": scraped_at.isoformat(),
+            "title": title,
+            "profile": profile,
+            "posts": posts,
+        }
+
+        if user_data.get("mode") == "profile":
+            data["replies"] = replies
+
+        if user_data.get("mode") == "search" and user_data.get("searchSort") == "profiles":
+            data["profiles"] = profiles
+
+        if user_data.get("includeRawText"):
+            data["raw_visible_text"] = body_text
+
+        await context.push_data(data)
+
+    except Exception as e:
+        Actor.log.exception(f"Exception occurred in default_handler while scraping {url}: {e}")
+        await _save_debug_artifacts(context, "handler_exception")
+        raise

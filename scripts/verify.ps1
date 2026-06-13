@@ -25,6 +25,7 @@ try {
     Invoke-Checked $Python @("-m", "ruff", "check", ".")
     Invoke-Checked $Python @("-m", "ruff", "format", "--check", ".")
     Invoke-Checked $Python @("-m", "mypy")
+    Invoke-Checked $Python @("-m", "pytest")
 }
 finally {
     Pop-Location

@@ -1,0 +1,99 @@
+largitdata
+largitdata
+largitdata
+大數軟體有限公司 (LargitData Inc) 是一家提供人工智慧(AI)、輿情大數據(Big Data)在雲平台(Cloud)的AI 與大數據分析公司，主要產品包含：RAGi 企業級AI 決策平台、AIMochi - 會議智慧助理與 InfomIner即時輿情分析分析平台。
+largitdata.com
+4,936位粉絲
+追蹤
+提及
+串文
+回覆
+影音內容
+轉發
+largitdata
+1小時
+如何讓AI自己做AI研究，但不作弊？
+Recursive近日發表了自動化AI研究系統的成果，在固定預算語言模型訓練、小模型訓練速度、GPU kernel優化三項基準上刷新SOTA。
+但亮點是他們怎麼面對reward hacking。當你給AI一個分數去優化，它有時不會真的把事情做好，而是鑽評測的漏洞，做出分數很高、卻違背任務本意的解法。三項基準都遇到這個問題，在GPU kernel優化上特別嚴重：有些解法不是真的變快，而是把答案存起來重複使用，或利用計時工具的細節讓自己看起來很快。
+解法是把嚴格的自動化檢查內化進迴圈：搜尋變強，評估器就必須跟著變強。換句話說，這是雙迴圈：agent在一側演化，evaluator在另一側跟著演化，兩邊共同升級。
+成果有多驚人？在NanoGPT Speedrun這成熟基準上，系統仍然把訓練時間從79.7秒壓到77.5秒。在NanoChat Autoresearch上，系統甚至超越了目前社群最佳解。而在SOL-ExecBench上，系統在235個kernel任務中拿下0.754的平均分數，將與硬體極限的差距縮小了18%。  
+翻譯
+1
+1
+largitdata
+1小時
+原始文章 recursive.com/artic…
+recursive.com
+First Steps Toward Automated AI Research - Recursive
+largitdata
+1天
+一行指令，就能即時取得免費 GPU？！
+Google 推出 Colab CLI，包含四大功能：
+1. 即時配置GPU：透過一行指令，例如 colab --gpu T4 就可取得免費 GPU
+2. 遠端執行：用 colab exec 把本機的 Python 或完整 ML 管線直接丟到 Colab 運行
+3. 取回資料：透過 colab download 與 colab log 取回模型、資料集，以及可replay的 ipynb 紀錄
+4. 互動存取：用 colab repl 或 colab console 直接進入遠端環境操作
+此外 Colab CLI 完整融入標準終端機環境，任何具終端機存取能力的 Agent 都能直接使用。官方還附上一份 skill，讓 Agent 立刻理解如何呼叫這些指令。
+官方示範了一個實際案例：用 QLoRA 微調 Gemma 3-1B。開發者只要對 Agent 下一句自然語言指令，Agent 便會自動配置 T4 GPU、安裝套件、遠端執行微調腳本、下載產出的權重，最後關閉環境。將運算全部交給雲端，訓練完還能拉回本機端服務。  
+翻譯
+29
+5
+4
+19
+largitdata
+1天
+原始文章： developers.googleblog.com/intro…
+developers.googleblog.com
+Introducing the Google Colab CLI
+2
+1
+largitdata
+2天
+燒 Token 神器 Fable 5 來了，但真的這麼厲害嗎？
+有 Anthropic 工程師分享了在 Loop Engineering 上的實測心得，發現兩個亮點：
+1. 自我修正：只要先設好目標或評分標準，在環境裝上回饋機制，它就能自己執行、看回饋、修正，一輪一輪做到達標為止。在機器學習挑戰中， Fable 5 敢大改架構，它甚至願意賭一些一開始會讓分數變差的方向（例如模型量化），但不因短期退步就收手，最後取得重大進展，訓練成效大約是Opus 4.7的六倍。反觀Opus 4.7只敢微調幾個數值，格局小很多。
+2. 記憶：Fable 5會把這次學到的東西寫下來，下次再拿出來用，等於把好幾次對話串成一個大迴圈。好的記憶會經過五步：犯錯先記下、追查原因、確認真的是這樣、整理成通則、之後直接查而不用重想一遍。Sonnet 4.6 通常只做到第一步記錄，Opus 4.7會驗證但做得不多，Fable 5則常常五步走完，最強的時候有73%都驗證過，還能把心得整理成通則，讓之後的任務更省力。
+所以 Fable 5 不只是更會解題，更會自己累積經驗、自己變強，這是與前幾代模型最關鍵的差異。  
+翻譯
+11
+1
+1
+4
+largitdata
+2天
+原始文章 x.com/RLanc…
+x.com
+Lance Martin (@RLanceMartin) on X
+largitdata
+3天
+什麼是迴圈工程？！
+當龍蝦之父說：別再一個個指令地催你的agent，你該設計一套會自動催它的迴圈。Claude Code 之父 不約而同地說，自己早已不親手下指令，而是讓迴圈自動prompt Claude、判斷下一步，工作變成「寫迴圈」。
+迴圈工程的概念於是成形：把親自下 Prompt 的你換掉，改由系統去做。迴圈是一個遞迴目標，你只要定義目的，由 AI 反覆迭代直到完成。構成如下：
+1. automation，讓任務按時觸發、自行發掘與分類
+2. worktree，使多個代理人平行作業而不互相干擾
+3. skills，把專案知識寫在外部，避免代理人每次重新猜測
+4. plugins 與 connectors，透過 MCP 串接既有工具與服務
+5. sub-agents，讓提出方案者與審查者分離，避免模型替自己的作業打分數
+最後還需要一個外部記憶，因為記憶必須存於磁碟而非上下文之中。
+不過作者呼籲，驗證責任仍在人身上，無人看管的迴圈也是無人看管地犯錯。理解力會在不知不覺間退化，迴圈交付得越快，人與程式碼之間的落差越大。最危險的姿態是放棄判斷，全盤接受迴圈給出的結果。  
+翻譯
+55
+8
+3
+57
+largitdata
+3天
+原始文章 addyo.substack.com/p/loo…
+addyo.substack.com
+Loop Engineering
+3
+登入以查看更多來自largitdata的內容。
+登入
+登入或註冊 Threads查看人們談論的主題，並加入對話。
+使用 Instagram 帳號繼續
+改以用戶名稱登入
+© 2026
+《Threads 使用條款》
+《隱私政策》
+《Cookie 政策》
+回報問題
