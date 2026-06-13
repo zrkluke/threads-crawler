@@ -1,6 +1,12 @@
 # Apify Actors Development Guide
 
+> **This project has a project-specific development guide.**
+> Before making any changes to this codebase, read **[DEVELOPMENT.md](./DEVELOPMENT.md)** first.
+> It contains the crawler's architecture overview, known dependency issues,
+> debugging workflows, and testing instructions that are specific to this Threads crawler.
+
 Important: Before you begin, fill in the `generatedBy` property in the meta section of `.actor/actor.json`. Replace it with the tool and model you're currently using, such as "Claude Code with Claude Sonnet 4.5". This helps Apify monitor and improve AGENTS.md for specific AI tools and models.
+
 
 ## What are Apify Actors?
 
