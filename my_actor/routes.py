@@ -557,7 +557,13 @@ async def _extract_dom_posts(
                         continue;
                     }
 
-                    const text = (node.innerText || '').trim();
+                    const clone = node.cloneNode(true);
+                    clone.querySelectorAll('a[href]').forEach((link) => {
+                        if (link.querySelector('div') || link.querySelector('img') || link.querySelector('svg')) {
+                            link.remove();
+                        }
+                    });
+                    const text = (clone.innerText || '').trim();
                     if (!text) {
                         continue;
                     }
@@ -666,6 +672,30 @@ def _empty_profile() -> dict[str, str | None]:
     }
 
 
+async def _remove_link_preview_cards(page: Any) -> None:
+    """Evaluate JS script in browser to clean up DOM preview card nodes before parsing."""
+    try:
+        await page.evaluate(
+            r"""() => {
+                const isExternal = (href) => {
+                    try {
+                        const url = new URL(href, window.location.origin);
+                        return !/(www\.)?threads\.(com|net)$/.test(url.hostname);
+                    } catch {
+                        return false;
+                    }
+                };
+                document.querySelectorAll('a[href]').forEach((link) => {
+                    if (isExternal(link.getAttribute('href')) && link.querySelector('div')) {
+                        link.remove();
+                    }
+                });
+            }"""
+        )
+    except Exception as e:
+        Actor.log.warning(f"Failed to remove link preview cards from DOM: {e}")
+
+
 async def _save_debug_artifacts(context: PlaywrightCrawlingContext, suffix: str) -> None:
     """Capture page screenshot and HTML page source and save them to Key-Value Store."""
     try:
@@ -699,6 +729,7 @@ async def default_handler(context: PlaywrightCrawlingContext) -> None:
 
     await context.page.wait_for_load_state("domcontentloaded")
     await context.page.wait_for_timeout(8_000)
+    await _remove_link_preview_cards(context.page)
 
     try:
         body_text = await context.page.locator("body").inner_text()
@@ -750,6 +781,7 @@ async def default_handler(context: PlaywrightCrawlingContext) -> None:
                     await context.page.goto(replies_url)
                     await context.page.wait_for_load_state("domcontentloaded")
                     await context.page.wait_for_timeout(8_000)
+                    await _remove_link_preview_cards(context.page)
 
                     reply_body_text = await context.page.locator("body").inner_text()
                     reply_lines = _clean_lines(reply_body_text)
