@@ -1,6 +1,8 @@
+import html
 from typing import Any, override
 from urllib.parse import quote
 
+import httpx
 from apify import Actor
 from camoufox import AsyncNewBrowser
 from crawlee import ConcurrencySettings, Request
@@ -193,3 +195,99 @@ async def main() -> None:
 
         # Run the crawler with the starting requests.
         await crawler.run(requests)
+
+        # Send Telegram notifications if configured
+        telegram_token = actor_input.get("telegramToken")
+        telegram_chat_id = actor_input.get("telegramChatId")
+
+        if telegram_token and telegram_chat_id:
+            await _send_telegram_notifications(telegram_token, telegram_chat_id)
+
+
+async def _send_telegram_notifications(token: str, chat_id: str) -> None:
+    Actor.log.info("Fetching scraped items from dataset for Telegram notification...")
+    try:
+        dataset = await Actor.open_dataset()
+        results = await dataset.get_data()
+        items = results.items
+
+        if not items:
+            Actor.log.info("No items found in dataset to send.")
+            return
+
+        messages = []
+        current_message = "🤖 <b>Threads Crawler Report</b>\n\n"
+
+        for item in items:
+            mode = item.get("mode", "unknown")
+            target = item.get("target", "unknown")
+            posts = item.get("posts", [])
+
+            target_header = f"📋 <b>Mode: {html.escape(mode)} | Target: {html.escape(target)}</b>\n"
+            if not posts:
+                target_header += "No posts found.\n\n"
+                if len(current_message) + len(target_header) > 4000:
+                    messages.append(current_message)
+                    current_message = target_header
+                else:
+                    current_message += target_header
+                continue
+
+            if len(current_message) + len(target_header) > 4000:
+                messages.append(current_message)
+                current_message = target_header
+            else:
+                current_message += target_header
+
+            for post in posts:
+                author = post.get("author", target)
+                posted_at = post.get("posted_at", "")
+                post_text = post.get("text", "").strip()
+                post_url = post.get("post_url")
+                metrics = post.get("metrics", {})
+
+                likes = metrics.get("likes", "0")
+                replies = metrics.get("replies", "0")
+                reposts = metrics.get("reposts", "0")
+
+                post_str = f"👤 <b>@{html.escape(author)}</b>"
+                if posted_at:
+                    post_str += f" ({html.escape(posted_at)})"
+                post_str += "\n"
+
+                snippet = html.escape(post_text[:300]) + "..." if len(post_text) > 300 else html.escape(post_text)
+                post_str += f"{snippet}\n"
+
+                post_str += f"👍 {likes} | 💬 {replies} | 🔁 {reposts}\n"
+                if post_url:
+                    post_str += f'🔗 <a href="{html.escape(post_url)}">View Post</a>\n'
+                post_str += "\n"
+
+                if len(current_message) + len(post_str) > 4000:
+                    messages.append(current_message)
+                    current_message = post_str
+                else:
+                    current_message += post_str
+
+        if current_message.strip():
+            messages.append(current_message)
+
+        # Send messages via Telegram API
+        url = f"https://api.telegram.org/bot{token}/sendMessage"
+        async with httpx.AsyncClient() as client:
+            for i, msg in enumerate(messages):
+                Actor.log.info(f"Sending Telegram message {i + 1}/{len(messages)}...")
+                payload = {
+                    "chat_id": chat_id,
+                    "text": msg,
+                    "parse_mode": "HTML",
+                    "disable_web_page_preview": True,
+                }
+                response = await client.post(url, json=payload, timeout=10.0)
+                if response.is_error:
+                    Actor.log.error(f"Failed to send Telegram message: {response.status_code} {response.text}")
+                else:
+                    Actor.log.info(f"Telegram message {i + 1} sent successfully.")
+
+    except Exception as e:
+        Actor.log.exception(f"Failed to send Telegram notifications: {e}")

@@ -143,6 +143,20 @@
             "type": "boolean",
             "editor": "checkbox",
             "default": false
+        },
+        "telegramToken": {
+            "title": "Telegram bot token",
+            "description": "Optional Telegram Bot Token. If set, results will be sent to the Telegram chat.",
+            "type": "string",
+            "editor": "textfield",
+            "isSecret": true,
+            "sectionCaption": "Telegram notifications"
+        },
+        "telegramChatId": {
+            "title": "Telegram chat ID",
+            "description": "Optional Telegram Chat ID (can be user ID or channel/group ID).",
+            "type": "string",
+            "editor": "textfield"
         }
     },
     "required": ["mode"]
