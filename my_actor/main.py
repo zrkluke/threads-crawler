@@ -205,6 +205,8 @@ async def main() -> None:
 
 
 async def _send_telegram_notifications(token: str, chat_id: str) -> None:
+    from datetime import UTC, datetime, timedelta
+
     Actor.log.info("Fetching scraped items from dataset for Telegram notification...")
     try:
         dataset = await Actor.open_dataset()
@@ -215,32 +217,43 @@ async def _send_telegram_notifications(token: str, chat_id: str) -> None:
             Actor.log.info("No items found in dataset to send.")
             return
 
-        messages = []
-        current_message = "🤖 <b>Threads Crawler Report</b>\n\n"
+        now = datetime.now(UTC)
+        time_limit = now - timedelta(hours=24)
 
         for item in items:
-            mode = item.get("mode", "unknown")
             target = item.get("target", "unknown")
             posts = item.get("posts", [])
 
-            target_header = f"📋 <b>Mode: {html.escape(mode)} | Target: {html.escape(target)}</b>\n"
-            if not posts:
-                target_header += "No posts found.\n\n"
-                if len(current_message) + len(target_header) > 4000:
-                    messages.append(current_message)
-                    current_message = target_header
+            # Filter posts from the last 24 hours
+            recent_posts = []
+            for post in posts:
+                posted_at_iso = post.get("posted_at_iso")
+                if posted_at_iso:
+                    try:
+                        post_time = datetime.fromisoformat(posted_at_iso)
+                        if post_time >= time_limit:
+                            recent_posts.append(post)
+                    except Exception as ex:
+                        Actor.log.warning(f"Failed to parse ISO timestamp '{posted_at_iso}': {ex}")
+                        posted_at = post.get("posted_at", "")
+                        if any(x in posted_at for x in ["秒", "分鐘", "小時", "現在", "昨天"]):
+                            recent_posts.append(post)
                 else:
-                    current_message += target_header
+                    posted_at = post.get("posted_at", "")
+                    if any(x in posted_at for x in ["秒", "分鐘", "小時", "現在", "昨天"]):
+                        recent_posts.append(post)
+
+            # If no recent posts found, skip sending message for this specific account
+            if not recent_posts:
+                Actor.log.info(f"No posts within the last 24 hours for target: {target}")
                 continue
 
-            if len(current_message) + len(target_header) > 4000:
-                messages.append(current_message)
-                current_message = target_header
-            else:
-                current_message += target_header
+            # Format separate messages for this account
+            messages = []
+            header = f"🤖 <b>Threads 爬蟲報告</b>\n👤 <b>@{html.escape(target)}</b> (過去 24 小時新貼文)\n\n"
+            current_message = header
 
-            for post in posts:
-                author = post.get("author", target)
+            for idx, post in enumerate(recent_posts, start=1):
                 posted_at = post.get("posted_at", "")
                 post_text = post.get("text", "").strip()
                 post_url = post.get("post_url")
@@ -250,44 +263,49 @@ async def _send_telegram_notifications(token: str, chat_id: str) -> None:
                 replies = metrics.get("replies", "0")
                 reposts = metrics.get("reposts", "0")
 
-                post_str = f"👤 <b>@{html.escape(author)}</b>"
+                is_truncated = len(post_text) > 400
+                snippet = html.escape(post_text[:400]) + "..." if is_truncated else html.escape(post_text)
+
+                post_str = f"<b>【貼文 {idx}】</b>"
                 if posted_at:
-                    post_str += f" ({html.escape(posted_at)})"
+                    post_str += f" <i>(發布於 {html.escape(posted_at)})</i>"
                 post_str += "\n"
+                post_str += f"{snippet}\n\n"
+                post_str += f"📊 <b>數據：</b> 👍 {likes} 讚 | 💬 {replies} 回覆 | 🔁 {reposts} 轉發\n"
 
-                snippet = html.escape(post_text[:300]) + "..." if len(post_text) > 300 else html.escape(post_text)
-                post_str += f"{snippet}\n"
-
-                post_str += f"👍 {likes} | 💬 {replies} | 🔁 {reposts}\n"
                 if post_url:
-                    post_str += f'🔗 <a href="{html.escape(post_url)}">View Post</a>\n'
-                post_str += "\n"
+                    post_str += f'🔗 <b>連結：</b> <a href="{html.escape(post_url)}">點此查看原文</a>\n'
+                else:
+                    profile_url = f"https://www.threads.net/@{target}"
+                    post_str += f'🔗 <b>連結：</b> <a href="{profile_url}">前往 @{html.escape(target)} 主頁</a> (未取得貼文網址)\n'
+
+                post_str += "────────────────────\n"
 
                 if len(current_message) + len(post_str) > 4000:
                     messages.append(current_message)
-                    current_message = post_str
+                    current_message = header + post_str
                 else:
                     current_message += post_str
 
-        if current_message.strip():
-            messages.append(current_message)
+            if current_message.strip() and current_message != header:
+                messages.append(current_message)
 
-        # Send messages via Telegram API
-        url = f"https://api.telegram.org/bot{token}/sendMessage"
-        async with httpx.AsyncClient() as client:
-            for i, msg in enumerate(messages):
-                Actor.log.info(f"Sending Telegram message {i + 1}/{len(messages)}...")
-                payload = {
-                    "chat_id": chat_id,
-                    "text": msg,
-                    "parse_mode": "HTML",
-                    "disable_web_page_preview": True,
-                }
-                response = await client.post(url, json=payload, timeout=10.0)
-                if response.is_error:
-                    Actor.log.error(f"Failed to send Telegram message: {response.status_code} {response.text}")
-                else:
-                    Actor.log.info(f"Telegram message {i + 1} sent successfully.")
+            # Send messages for this specific account
+            url = f"https://api.telegram.org/bot{token}/sendMessage"
+            async with httpx.AsyncClient() as client:
+                for i, msg in enumerate(messages):
+                    Actor.log.info(f"Sending Telegram message for @{target} ({i + 1}/{len(messages)})...")
+                    payload = {
+                        "chat_id": chat_id,
+                        "text": msg,
+                        "parse_mode": "HTML",
+                        "disable_web_page_preview": True,
+                    }
+                    response = await client.post(url, json=payload, timeout=10.0)
+                    if response.is_error:
+                        Actor.log.error(f"Failed to send Telegram message: {response.status_code} {response.text}")
+                    else:
+                        Actor.log.info(f"Telegram message for @{target} sent successfully.")
 
     except Exception as e:
         Actor.log.exception(f"Failed to send Telegram notifications: {e}")
