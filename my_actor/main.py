@@ -250,34 +250,25 @@ async def _send_telegram_notifications(token: str, chat_id: str) -> None:
 
             # Format separate messages for this account
             messages = []
-            header = f"🤖 <b>Threads 爬蟲報告</b>\n👤 <b>@{html.escape(target)}</b> (過去 24 小時新貼文)\n\n"
+            header = f"<b>Threads 爬蟲報告</b>\n<b>@{html.escape(target)}</b> (過去 24 小時新貼文)\n\n"
             current_message = header
 
             for idx, post in enumerate(recent_posts, start=1):
                 posted_at = post.get("posted_at", "")
                 post_text = post.get("text", "").strip()
                 post_url = post.get("post_url")
-                metrics = post.get("metrics", {})
-
-                likes = metrics.get("likes", "0")
-                replies = metrics.get("replies", "0")
-                reposts = metrics.get("reposts", "0")
-
-                is_truncated = len(post_text) > 400
-                snippet = html.escape(post_text[:400]) + "..." if is_truncated else html.escape(post_text)
 
                 post_str = f"<b>【貼文 {idx}】</b>"
                 if posted_at:
                     post_str += f" <i>(發布於 {html.escape(posted_at)})</i>"
                 post_str += "\n"
-                post_str += f"{snippet}\n\n"
-                post_str += f"📊 <b>數據：</b> 👍 {likes} 讚 | 💬 {replies} 回覆 | 🔁 {reposts} 轉發\n"
+                post_str += f"{html.escape(post_text)}\n\n"
 
                 if post_url:
-                    post_str += f'🔗 <b>連結：</b> <a href="{html.escape(post_url)}">點此查看原文</a>\n'
+                    post_str += f'<b>連結：</b> <a href="{html.escape(post_url)}">點此查看原文</a>\n'
                 else:
                     profile_url = f"https://www.threads.net/@{target}"
-                    post_str += f'🔗 <b>連結：</b> <a href="{profile_url}">前往 @{html.escape(target)} 主頁</a> (未取得貼文網址)\n'
+                    post_str += f'<b>連結：</b> <a href="{profile_url}">前往 @{html.escape(target)} 主頁</a> (未取得貼文網址)\n'
 
                 post_str += "────────────────────\n"
 

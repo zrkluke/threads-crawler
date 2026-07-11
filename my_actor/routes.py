@@ -408,6 +408,8 @@ def _parse_posts(
 
 def _post_url_username(post_url: str) -> str | None:
     path_parts = [part for part in urlparse(post_url).path.split("/") if part]
+    if len(path_parts) == 2 and path_parts[0] in {"t", "post"}:
+        return None
     if len(path_parts) < 3 or path_parts[1] != "post":
         return None
     if not path_parts[0].startswith("@"):
@@ -510,7 +512,7 @@ async def _extract_dom_posts(
 ) -> list[dict[str, object]]:
     cards = await context.page.evaluate(
         r"""() => {
-            const postUrlPattern = /^https:\/\/(www\.)?threads\.(com|net)\/@[^/]+\/post\/[^/?#]+/;
+            const postUrlPattern = /^https:\/\/(www\.)?threads\.(com|net)\/(?:(@[^/]+)\/post|t|post)\/([^/?#]+)/;
             const seen = new Set();
             const cards = [];
 
@@ -530,10 +532,16 @@ async def _extract_dom_posts(
             const normalizePostUrl = (href) => {
                 try {
                     const url = new URL(href, window.location.origin);
-                    if (!postUrlPattern.test(url.href)) {
+                    const match = url.href.match(postUrlPattern);
+                    if (!match) {
                         return null;
                     }
-                    return url.href.replace(/[?#].*$/, '');
+                    const username = match[3];
+                    const postId = match[4];
+                    if (username) {
+                        return `${url.origin}/${username}/post/${postId}`;
+                    }
+                    return `${url.origin}/t/${postId}`;
                 } catch {
                     return null;
                 }
@@ -606,8 +614,12 @@ async def _extract_dom_posts(
 
         if profile_username:
             card_username = _post_url_username(card["url"])
-            if not card_username or card_username.lower() != profile_username.lower():
-                continue
+            if card_username:
+                if card_username.lower() != profile_username.lower():
+                    continue
+            else:
+                post_id = card["url"].split("/")[-1]
+                card["url"] = f"https://www.threads.net/@{profile_username}/post/{post_id}"
             if exclude_reply_context and _has_reply_context(card.get("contextText")):
                 continue
 
@@ -696,6 +708,32 @@ async def _remove_link_preview_cards(page: Any) -> None:
         Actor.log.warning(f"Failed to remove link preview cards from DOM: {e}")
 
 
+async def _expand_truncated_posts(page: Any) -> None:
+    """Evaluate JS script in browser to click all 'More' / '更多' / '顯示更多' / '显示更多' buttons."""
+    try:
+        await page.evaluate(
+            r"""() => {
+                const targetTexts = new Set(['more', '更多', '顯示更多', '显示更多']);
+                const elements = Array.from(document.querySelectorAll('div, span, button, [role="button"]'));
+                for (const el of elements) {
+                    if (el.children.length > 0) {
+                        continue;
+                    }
+                    const text = (el.textContent || el.innerText || '').trim().toLowerCase();
+                    if (targetTexts.has(text)) {
+                        try {
+                            el.click();
+                        } catch (e) {
+                            // ignore
+                        }
+                    }
+                }
+            }"""
+        )
+    except Exception as e:
+        Actor.log.warning(f"Failed to expand truncated posts: {e}")
+
+
 async def _save_debug_artifacts(context: PlaywrightCrawlingContext, suffix: str) -> None:
     """Capture page screenshot and HTML page source and save them to Key-Value Store."""
     try:
@@ -729,6 +767,8 @@ async def default_handler(context: PlaywrightCrawlingContext) -> None:
 
     await context.page.wait_for_load_state("domcontentloaded")
     await context.page.wait_for_timeout(8_000)
+    await _expand_truncated_posts(context.page)
+    await context.page.wait_for_timeout(1_000)
     await _remove_link_preview_cards(context.page)
 
     try:
@@ -781,6 +821,8 @@ async def default_handler(context: PlaywrightCrawlingContext) -> None:
                     await context.page.goto(replies_url)
                     await context.page.wait_for_load_state("domcontentloaded")
                     await context.page.wait_for_timeout(8_000)
+                    await _expand_truncated_posts(context.page)
+                    await context.page.wait_for_timeout(1_000)
                     await _remove_link_preview_cards(context.page)
 
                     reply_body_text = await context.page.locator("body").inner_text()
