@@ -4,8 +4,8 @@ FROM apify/actor-node-playwright-firefox:22
 # Copy package.json and package-lock.json first
 COPY --chown=myuser:myuser package*.json ./
 
-# Install all npm dependencies (needed for compiling TypeScript)
-RUN npm install --quiet
+# Install all npm dependencies (force include devDependencies for compiling TypeScript)
+RUN npm install --quiet --include=dev
 
 # Copy the rest of the source code
 COPY --chown=myuser:myuser . ./
