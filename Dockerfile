@@ -1,5 +1,5 @@
 # Use the Apify base image for Node.js Playwright Firefox
-FROM apify/actor-node-playwright-firefox:20
+FROM apify/actor-node-playwright-firefox:22
 
 # Copy package.json and package-lock.json first
 COPY package*.json ./
