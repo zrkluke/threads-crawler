@@ -1,3 +1,4 @@
+import { describe, test, expect } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -16,12 +17,13 @@ import {
     _parse_posts,
 } from '../src/routes.js';
 import { _normalize_cookies } from '../src/main.js';
+import { ActorInput } from '../src/types.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const FIXTURE_PATH = path.join(__dirname, 'fixtures', 'largitdata_profile_body.txt');
 
-function loadFixture() {
+function loadFixture(): string {
     return fs.readFileSync(FIXTURE_PATH, 'utf-8');
 }
 
@@ -42,7 +44,7 @@ describe('Threads Parser Unit Tests', () => {
         const body = loadFixture();
         const lines = _clean_lines(body);
         const scraped_at = new Date(Date.UTC(2026, 5, 12, 16, 10, 45));
-        const user_data = { maxPostsPerAccount: 10, mode: 'profile', postLanguageFilter: 'any' };
+        const user_data: ActorInput = { maxPostsPerAccount: 10, mode: 'profile', postLanguageFilter: 'any' };
 
         const posts = _parse_posts(lines, 'largitdata', user_data, scraped_at);
         expect(posts.length).toBeGreaterThanOrEqual(5);
@@ -52,7 +54,7 @@ describe('Threads Parser Unit Tests', () => {
         const body = loadFixture();
         const lines = _clean_lines(body);
         const scraped_at = new Date(Date.UTC(2026, 5, 12, 16, 10, 45));
-        const user_data = { maxPostsPerAccount: 10, mode: 'profile', postLanguageFilter: 'any' };
+        const user_data: ActorInput = { maxPostsPerAccount: 10, mode: 'profile', postLanguageFilter: 'any' };
 
         const posts = _parse_posts(lines, 'largitdata', user_data, scraped_at);
         const first = posts[0];
@@ -70,23 +72,23 @@ describe('Threads Parser Unit Tests', () => {
         const body = loadFixture();
         const lines = _clean_lines(body);
         const scraped_at = new Date(Date.UTC(2026, 5, 12, 16, 10, 45));
-        const user_data = { maxPostsPerAccount: 10, mode: 'profile', postLanguageFilter: 'any' };
+        const user_data: ActorInput = { maxPostsPerAccount: 10, mode: 'profile', postLanguageFilter: 'any' };
 
         const posts = _parse_posts(lines, 'largitdata', user_data, scraped_at);
         const colab_post = posts.find(p => String(p.text).includes('Colab CLI'));
 
         expect(colab_post).toBeDefined();
-        expect(colab_post.metrics.likes).toBe('29');
-        expect(colab_post.metrics.replies).toBe('5');
-        expect(colab_post.metrics.reposts).toBe('4');
-        expect(colab_post.metrics.shares).toBe('19');
+        expect(colab_post!.metrics.likes).toBe('29');
+        expect(colab_post!.metrics.replies).toBe('5');
+        expect(colab_post!.metrics.reposts).toBe('4');
+        expect(colab_post!.metrics.shares).toBe('19');
     });
 
     test('test_translate_marker_stripped_from_real_body', () => {
         const body = loadFixture();
         const lines = _clean_lines(body);
         const scraped_at = new Date(Date.UTC(2026, 5, 12, 16, 10, 45));
-        const user_data = { maxPostsPerAccount: 10, mode: 'profile', postLanguageFilter: 'any' };
+        const user_data: ActorInput = { maxPostsPerAccount: 10, mode: 'profile', postLanguageFilter: 'any' };
 
         const posts = _parse_posts(lines, 'largitdata', user_data, scraped_at);
         for (const post of posts) {
@@ -98,7 +100,7 @@ describe('Threads Parser Unit Tests', () => {
         const body = loadFixture();
         const lines = _clean_lines(body);
         const scraped_at = new Date(Date.UTC(2026, 5, 12, 16, 10, 45));
-        const user_data = { maxPostsPerAccount: 100, mode: 'profile', postLanguageFilter: 'any' };
+        const user_data: ActorInput = { maxPostsPerAccount: 100, mode: 'profile', postLanguageFilter: 'any' };
 
         const posts = _parse_posts(lines, 'largitdata', user_data, scraped_at);
         for (const post of posts) {
@@ -158,8 +160,8 @@ describe('Threads Parser Unit Tests', () => {
 
     test('test_parse_relative_window', () => {
         const now = new Date(Date.UTC(2026, 5, 12, 12, 0, 0));
-        expect(_parse_relative_window("24 hours", now).toISOString()).toBe(new Date(Date.UTC(2026, 5, 11, 12, 0, 0)).toISOString());
-        expect(_parse_relative_window("7天", now).toISOString()).toBe(new Date(Date.UTC(2026, 5, 5, 12, 0, 0)).toISOString());
+        expect(_parse_relative_window("24 hours", now)!.toISOString()).toBe(new Date(Date.UTC(2026, 5, 11, 12, 0, 0)).toISOString());
+        expect(_parse_relative_window("7天", now)!.toISOString()).toBe(new Date(Date.UTC(2026, 5, 5, 12, 0, 0)).toISOString());
         expect(_parse_relative_window("invalid", now)).toBeNull();
     });
 

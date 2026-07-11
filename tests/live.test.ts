@@ -1,5 +1,7 @@
+import { describe, test, expect } from 'vitest';
 import { chromium } from 'playwright';
 import { _clean_lines, _parse_posts } from '../src/routes.js';
+import { ActorInput } from '../src/types.js';
 
 describe('Threads Live Layout Integration Test', () => {
     test('test_threads_live_profile', async () => {
@@ -16,23 +18,28 @@ describe('Threads Live Layout Integration Test', () => {
 
         // Click all "More" buttons to expand truncated posts
         await page.evaluate(() => {
-            const targetTexts = new Set(['more', '更多', '顯示更多', '显示更多']);
+            const targetTexts = new Set<string>(['more', '更多', '顯示更多', '显示更多']);
             const elements = Array.from(document.querySelectorAll('div, span, button, [role="button"]'));
             for (const el of elements) {
                 if (el.children.length > 0) continue;
-                const text = (el.textContent || el.innerText || '').trim().toLowerCase();
+                const text = (el.textContent || '').trim().toLowerCase();
                 if (targetTexts.has(text)) {
-                    try { el.click(); } catch(e) {}
+                    try {
+                        (el as HTMLElement).click();
+                    } catch (e) {
+                        // ignore
+                    }
                 }
             }
         });
         await page.waitForTimeout(1000);
 
-        const bodyText = await page.locator("body").innerText();
+        const bodyLocator = page.locator("body");
+        const bodyText = await bodyLocator.innerText();
         const lines = _clean_lines(bodyText);
 
         const scraped_at = new Date();
-        const user_data = {
+        const user_data: ActorInput = {
             maxPostsPerAccount: 10,
             mode: "profile",
             postLanguageFilter: "any",

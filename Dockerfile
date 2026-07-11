@@ -2,13 +2,19 @@
 FROM apify/actor-node-playwright-firefox:22
 
 # Copy package.json and package-lock.json first
-COPY package*.json ./
+COPY --chown=myuser:myuser package*.json ./
 
-# Install npm dependencies
-RUN npm install --quiet --omit=dev
+# Install all npm dependencies (needed for compiling TypeScript)
+RUN npm install --quiet
 
 # Copy the rest of the source code
-COPY . .
+COPY --chown=myuser:myuser . ./
+
+# Compile TypeScript to dist/
+RUN npm run build
+
+# Prune devDependencies to keep the image size small
+RUN npm prune --omit=dev
 
 # Download the Camoufox browser binary
 RUN npx camoufox-js fetch

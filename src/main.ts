@@ -18,23 +18,17 @@ import {
     _expand_truncated_posts,
     _save_debug_artifacts,
 } from './routes.js';
+import { ActorInput, ThreadPost, ThreadProfile, ProfileSearchResult, ScrapedResult } from './types.js';
 
 const THREADS_BASE_URL = "https://www.threads.com";
 const RECENT_SEARCH_DEFAULT_RELATIVE_DATE = "7 days";
-const SEARCH_FILTER_BY_SORT = {
+const SEARCH_FILTER_BY_SORT: Record<string, string | null> = {
     top: null,
     latest: "recent",
     profiles: "profiles",
 };
-const ZH_TW_CONTEXT_OPTIONS = {
-    locale: "zh-TW",
-    timezoneId: "Asia/Taipei",
-    extraHTTPHeaders: {
-        "Accept-Language": "zh-TW,zh;q=0.9,en-US;q=0.6,en;q=0.4",
-    },
-};
 
-function _split_bulk(value, split_spaces = false) {
+function _split_bulk(value: string | undefined | null, split_spaces = false): string[] {
     if (!value) return [];
     let normalized = value.replace(/,/g, '\n').replace(/\t/g, '\n');
     if (split_spaces) {
@@ -43,9 +37,9 @@ function _split_bulk(value, split_spaces = false) {
     return normalized.split('\n').map(item => item.trim()).filter(Boolean);
 }
 
-function _dedupe(values) {
-    const seen = new Set();
-    const deduped = [];
+function _dedupe(values: string[]): string[] {
+    const seen = new Set<string>();
+    const deduped: string[] = [];
     for (const val of values) {
         const key = val.toLowerCase();
         if (seen.has(key)) continue;
@@ -55,19 +49,19 @@ function _dedupe(values) {
     return deduped;
 }
 
-function _normalize_account(value) {
+function _normalize_account(value: string): string {
     return value.trim().replace(/^@/, '').replace(/\/$/, '');
 }
 
-function _normalize_tag(value) {
+function _normalize_tag(value: string): string {
     return value.trim().replace(/^#/, '').replace(/\/$/, '');
 }
 
-function _urls_from_request_list(items) {
+function _urls_from_request_list(items?: { url: string }[]): string[] {
     return (items || []).map(item => item.url).filter(Boolean);
 }
 
-function _build_search_url(keyword, search_sort) {
+function _build_search_url(keyword: string, search_sort: string): string {
     let url = `${THREADS_BASE_URL}/search?q=${encodeURIComponent(keyword)}&serp_type=default`;
     const search_filter = SEARCH_FILTER_BY_SORT[search_sort];
     if (search_filter) {
@@ -76,11 +70,11 @@ function _build_search_url(keyword, search_sort) {
     return url;
 }
 
-export function _normalize_cookies(cookies) {
-    const normalized = [];
+export function _normalize_cookies(cookies: any[]): any[] {
+    const normalized: any[] = [];
     for (const c of cookies) {
         if (!c || typeof c !== 'object') continue;
-        const cookie = {
+        const cookie: Record<string, any> = {
             name: c.name,
             value: c.value,
             domain: c.domain,
@@ -113,9 +107,9 @@ export function _normalize_cookies(cookies) {
     return normalized;
 }
 
-function _build_requests(actor_input) {
+function _build_requests(actor_input: ActorInput): any[] {
     const mode = actor_input.mode || "profile";
-    const max_posts_per_account = Math.min(parseInt(actor_input.maxPostsPerAccount || actor_input.maxItems || 10, 10), 100);
+    const max_posts_per_account = Math.min(parseInt(String(actor_input.maxPostsPerAccount || actor_input.maxItems || 10), 10), 100);
     const search_sort = actor_input.searchSort || "latest";
     const explicit_post_language_filter = actor_input.postLanguageFilter || actor_input.languageFilter;
     const default_post_language_filter = ["search", "tag"].includes(mode) ? "traditionalChinese" : "any";
@@ -137,7 +131,7 @@ function _build_requests(actor_input) {
         maxPostsPerAccount: max_posts_per_account,
     };
 
-    const requests = [];
+    const requests: any[] = [];
 
     if (mode === "profile") {
         const rawAccounts = [...(actor_input.accounts || []), ..._split_bulk(actor_input.bulkAccounts, true)];
@@ -191,7 +185,7 @@ function _build_requests(actor_input) {
     return requests;
 }
 
-function escapeHtml(text) {
+function escapeHtml(text: string | null | undefined): string {
     if (!text) return "";
     return String(text)
         .replace(/&/g, '&amp;')
@@ -201,7 +195,7 @@ function escapeHtml(text) {
         .replace(/'/g, '&#039;');
 }
 
-async function _send_telegram_notifications(token, chat_id) {
+async function _send_telegram_notifications(token: string, chat_id: string): Promise<void> {
     console.log("Fetching scraped items from dataset for Telegram notification...");
     try {
         const dataset = await Actor.openDataset();
@@ -215,8 +209,9 @@ async function _send_telegram_notifications(token, chat_id) {
         const timeLimit = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
         for (const item of items) {
-            const target = item.target || "unknown";
-            const posts = item.posts || [];
+            const typedItem = item as ScrapedResult;
+            const target = typedItem.target || "unknown";
+            const posts = typedItem.posts || [];
 
             const recentPosts = posts.filter(post => {
                 if (post.posted_at_iso) {
@@ -236,7 +231,7 @@ async function _send_telegram_notifications(token, chat_id) {
                 continue;
             }
 
-            const messages = [];
+            const messages: string[] = [];
             const header = `<b>Threads 爬蟲報告</b>\n<b>@${escapeHtml(target)}</b> (過去 24 小時新貼文)\n\n`;
             let currentMessage = header;
 
@@ -289,7 +284,7 @@ async function _send_telegram_notifications(token, chat_id) {
                 }
             }
         }
-    } catch (e) {
+    } catch (e: any) {
         console.error(`Failed to send Telegram notifications: ${e.message}`);
     }
 }
@@ -297,7 +292,7 @@ async function _send_telegram_notifications(token, chat_id) {
 async function main() {
     await Actor.init();
 
-    const actor_input = await Actor.getInput() || {};
+    const actor_input: ActorInput = await Actor.getInput() || {};
     const requests = _build_requests(actor_input);
 
     if (requests.length === 0) {
@@ -318,15 +313,15 @@ async function main() {
             launcher: firefox,
             useIncognitoPages: true,
             launchOptions: {
-                ...camoufoxOptions,
+                ...camoufoxOptions as any,
             },
         },
         browserPoolOptions: {
             prePageCreateHooks: [
                 (pageId, browserController, pageOptions) => {
                     if (pageOptions) {
-                        pageOptions.locale = "zh-TW";
-                        pageOptions.timezoneId = "Asia/Taipei";
+                        (pageOptions as any).locale = "zh-TW";
+                        (pageOptions as any).timezoneId = "Asia/Taipei";
                     }
                 },
             ],
@@ -343,7 +338,7 @@ async function main() {
                     try {
                         const normalized = _normalize_cookies(cookies);
                         await crawlingContext.page.context().addCookies(normalized);
-                    } catch (e) {
+                    } catch (e: any) {
                         console.error(`Failed to inject session cookies: ${e.message}`);
                     }
                 }
@@ -364,14 +359,15 @@ async function main() {
             await _remove_link_preview_cards(page);
 
             try {
-                const bodyText = await page.locator("body").innerText();
+                const bodyLocator = page.locator("body");
+                const bodyText = await bodyLocator.innerText();
                 const lines = _clean_lines(bodyText);
                 const profile = userData.mode === "profile" ? _parse_profile(lines) : _empty_profile();
                 const title = await page.title();
 
-                let replies = [];
-                let posts = [];
-                let profiles = [];
+                let replies: ThreadPost[] = [];
+                let posts: ThreadPost[] = [];
+                let profiles: ProfileSearchResult[] = [];
 
                 if (userData.mode === "search" && userData.searchSort === "profiles") {
                     profiles = await _extract_profile_results(page);
@@ -380,7 +376,7 @@ async function main() {
                         await _save_debug_artifacts(page, url, "search_profiles_empty");
                     }
                 } else {
-                    let profile_username = null;
+                    let profile_username: string | null = null;
                     if (userData.mode === "profile") {
                         profile_username = profile.username || userData.target || null;
                     }
@@ -398,7 +394,7 @@ async function main() {
                         posts = _merge_text_posts_with_dom_posts(
                             textPosts,
                             domPosts,
-                            parseInt(userData.maxPostsPerAccount || 10, 10)
+                            parseInt(String(userData.maxPostsPerAccount || 10), 10)
                         );
                     } else {
                         posts = domPosts.length > 0 ? domPosts : textPosts;
@@ -427,21 +423,21 @@ async function main() {
                             replies = _merge_text_posts_with_dom_posts(
                                 replyTextPosts,
                                 replyDomPosts,
-                                parseInt(userData.maxPostsPerAccount || 10, 10)
+                                parseInt(String(userData.maxPostsPerAccount || 10), 10)
                             );
 
                             if (replies.length === 0) {
                                 console.warn(`No replies extracted for ${profile_username}. Saving debug artifacts...`);
                                 await _save_debug_artifacts(page, repliesUrl, `replies_empty_${profile_username}`);
                             }
-                        } catch (e) {
+                        } catch (e: any) {
                             console.error(`Failed to scrape replies for ${profile_username} at ${repliesUrl}: ${e.message}`);
                             await _save_debug_artifacts(page, repliesUrl, `replies_failed_${profile_username}`);
                         }
                     }
                 }
 
-                const data = {
+                const data: ScrapedResult = {
                     url,
                     mode: userData.mode,
                     target: userData.target,
@@ -465,7 +461,7 @@ async function main() {
 
                 await Actor.pushData(data);
 
-            } catch (e) {
+            } catch (e: any) {
                 console.error(`Exception occurred in requestHandler while scraping ${url}: ${e.stack}`);
                 await _save_debug_artifacts(page, url, "handler_exception");
                 throw e;

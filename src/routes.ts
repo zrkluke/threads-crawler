@@ -1,7 +1,15 @@
 import { Actor } from 'apify';
+import { Page } from 'playwright';
+import {
+    ActorInput,
+    ThreadMetrics,
+    ThreadPost,
+    ThreadProfile,
+    ProfileSearchResult
+} from './types.js';
 
-export const PROFILE_TABS = new Set(["Threads", "Replies", "Media", "Reposts", "串文", "影音內容", "轉發"]);
-export const GLOBAL_STOP_MARKERS = new Set([
+export const PROFILE_TABS = new Set<string>(["Threads", "Replies", "Media", "Reposts", "串文", "影音內容", "轉發"]);
+export const GLOBAL_STOP_MARKERS = new Set<string>([
     "Log in",
     "Log in or sign up for Threads",
     "See what people are talking about and join the conversation.",
@@ -11,8 +19,8 @@ export const GLOBAL_STOP_MARKERS = new Set([
     "登录或注册 Threads",
     "登录",
 ]);
-export const TRANSLATE_MARKERS = new Set(["Translate", "翻譯", "翻译"]);
-export const NON_AUTHOR_LINES = new Set([
+export const TRANSLATE_MARKERS = new Set<string>(["Translate", "翻譯", "翻译"]);
+export const NON_AUTHOR_LINES = new Set<string>([
     ...PROFILE_TABS,
     ...TRANSLATE_MARKERS,
     "Follow",
@@ -32,17 +40,17 @@ export const NON_AUTHOR_LINES = new Set([
     "More",
 ]);
 
-const SIMPLIFIED_CHINESE_MARKERS = new Set(
-    "个们会后发关欢见过还进时說让从对该网车门东长云电学习广书买卖开间问题体国现与扩优资料软体虽请这里为于号與實"
+const SIMPLIFIED_CHINESE_MARKERS = new Set<string>(
+    "个们会后发关欢见过还进时说让从对该网车门东长云电学广书买开问题现与扩优软体虽请这里为于号实"
 );
 const CJK_PATTERN = /[\u4e00-\u9fff]/;
 
-export function _clean_lines(text) {
+export function _clean_lines(text: string | null | undefined): string[] {
     if (!text) return [];
     return text.split('\n').map(line => line.trim()).filter(Boolean);
 }
 
-export function _looks_like_post_time(value) {
+export function _looks_like_post_time(value: string): boolean {
     const normalized = value.trim().toLowerCase();
     return (
         /^\d+\s*[smhdw]$/.test(normalized)
@@ -53,11 +61,11 @@ export function _looks_like_post_time(value) {
     );
 }
 
-export function _is_metric_line(value) {
+export function _is_metric_line(value: string): boolean {
     return /^[\d,.]+\s*[KMB]?$/i.test(value.trim());
 }
 
-export function _looks_like_author(value) {
+export function _looks_like_author(value: string): boolean {
     const normalized = value.trim();
     if (!normalized || NON_AUTHOR_LINES.has(normalized)) return false;
     if (GLOBAL_STOP_MARKERS.has(normalized)) return false;
@@ -65,7 +73,7 @@ export function _looks_like_author(value) {
     return normalized.length <= 80;
 }
 
-export function _matches_post_language_filter(text, post_language_filter) {
+export function _matches_post_language_filter(text: string, post_language_filter: string | undefined): boolean {
     if (!post_language_filter || post_language_filter === 'any') return true;
     if (post_language_filter !== 'traditionalChinese') return true;
 
@@ -86,7 +94,7 @@ export function _matches_post_language_filter(text, post_language_filter) {
     return simplifiedHits === 0;
 }
 
-export function _parse_relative_datetime(value, scraped_at) {
+export function _parse_relative_datetime(value: string, scraped_at: Date): string | null {
     const normalized = value.trim().toLowerCase();
     if (normalized === 'now' || normalized === '現在') {
         return scraped_at.toISOString();
@@ -143,7 +151,7 @@ export function _parse_relative_datetime(value, scraped_at) {
     return null;
 }
 
-export function _parse_relative_window(value, scraped_at) {
+export function _parse_relative_window(value: string | undefined, scraped_at: Date): Date | null {
     if (!value) return null;
     const match = value.toLowerCase().match(/(\d+)\s*(second|minute|hour|day|week|month|year|秒|分鐘|小時|天|日|週|周|月|年)s?/);
     if (!match) return null;
@@ -160,13 +168,13 @@ export function _parse_relative_window(value, scraped_at) {
     return d;
 }
 
-export function _parse_date(value) {
+export function _parse_date(value: string | undefined): Date | null {
     if (typeof value !== 'string' || !value) return null;
     const d = new Date(value);
     return isNaN(d.getTime()) ? null : d;
 }
 
-export function _is_in_date_range(posted_at_iso, user_data, scraped_at) {
+export function _is_in_date_range(posted_at_iso: string | null, user_data: ActorInput, scraped_at: Date): boolean {
     if (!posted_at_iso) return true;
     const posted_at = new Date(posted_at_iso);
     const start_date = _parse_date(user_data.startDate);
@@ -183,8 +191,8 @@ export function _is_in_date_range(posted_at_iso, user_data, scraped_at) {
     return true;
 }
 
-export function _parse_visible_metrics(values) {
-    const padded = [...values];
+export function _parse_visible_metrics(values: string[]): ThreadMetrics {
+    const padded: (string | null)[] = [...values];
     while (padded.length < 6) padded.push(null);
     return {
         likes: padded[0],
@@ -197,9 +205,9 @@ export function _parse_visible_metrics(values) {
     };
 }
 
-export function _parse_profile(lines) {
+export function _parse_profile(lines: string[]): ThreadProfile {
     const username = lines[0] || null;
-    const profile = {
+    const profile: ThreadProfile = {
         username,
         display_name: null,
         bio: null,
@@ -218,7 +226,7 @@ export function _parse_profile(lines) {
 
     const header_lines = lines.slice(0, content_start);
     let repeated_username_count = 0;
-    const bio_lines = [];
+    const bio_lines: string[] = [];
 
     for (const line of header_lines) {
         if (line === username) {
@@ -244,7 +252,13 @@ export function _parse_profile(lines) {
     return profile;
 }
 
-export function _find_post_start(lines, index, username, profile_only) {
+interface PostStartInfo {
+    author: string;
+    posted_at: string;
+    nextIndex: number;
+}
+
+export function _find_post_start(lines: string[], index: number, username: string | null, profile_only: boolean): PostStartInfo | null {
     if (index >= lines.length || !_looks_like_author(lines[index])) return null;
     if (profile_only && lines[index] !== username) return null;
 
@@ -264,14 +278,14 @@ export function _find_post_start(lines, index, username, profile_only) {
     return null;
 }
 
-export function _find_next_post_start(lines, index, username, profile_only) {
+export function _find_next_post_start(lines: string[], index: number, username: string | null, profile_only: boolean): boolean {
     if (_find_post_start(lines, index, username, profile_only)) return true;
     return !!(profile_only && _find_post_start(lines, index, username, false));
 }
 
-export function _expand_combined_author_time_lines(lines, username) {
+export function _expand_combined_author_time_lines(lines: string[], username: string | null): string[] {
     if (!username) return lines;
-    const expanded_lines = [];
+    const expanded_lines: string[] = [];
     const username_prefix = `${username} `;
     for (const line of lines) {
         if (!line.toLowerCase().startsWith(username_prefix.toLowerCase())) {
@@ -284,7 +298,7 @@ export function _expand_combined_author_time_lines(lines, username) {
             continue;
         }
         const parts = remainder.split(/\s+/);
-        let split_values = null;
+        let split_values: { posted_at: string; remainder: string } | null = null;
         if (parts.length > 0 && _looks_like_post_time(parts[0])) {
             split_values = { posted_at: parts[0], remainder: parts.slice(1).join(' ') };
         } else if (parts.length >= 2 && _looks_like_post_time(`${parts[0]} ${parts[1]}`)) {
@@ -304,8 +318,8 @@ export function _expand_combined_author_time_lines(lines, username) {
     return expanded_lines;
 }
 
-export function _parse_posts(lines, username, user_data, scraped_at) {
-    const max_posts = parseInt(user_data.maxPostsPerAccount || 10, 10);
+export function _parse_posts(lines: string[], username: string | null, user_data: ActorInput, scraped_at: Date): ThreadPost[] {
+    const max_posts = parseInt(String(user_data.maxPostsPerAccount || 10), 10);
     const mode = user_data.mode;
     const profile_only = mode === 'profile' && !!username;
     lines = _expand_combined_author_time_lines(lines, username);
@@ -322,14 +336,14 @@ export function _parse_posts(lines, username, user_data, scraped_at) {
         start = max_tab_index + 1;
     }
 
-    const stop_markers = new Set(GLOBAL_STOP_MARKERS);
+    const stop_markers = new Set<string>(GLOBAL_STOP_MARKERS);
     if (username) {
         stop_markers.add(`Log in to see more from ${username}.`);
         stop_markers.add(`登入以查看更多來自${username}的內容。`);
         stop_markers.add(`登录以查看更多来自${username}的内容。`);
     }
 
-    const posts = [];
+    const posts: ThreadPost[] = [];
     let index = start;
     while (index < lines.length) {
         if (stop_markers.has(lines[index])) {
@@ -345,7 +359,7 @@ export function _parse_posts(lines, username, user_data, scraped_at) {
         const { author, posted_at } = post_start;
         index = post_start.nextIndex;
 
-        const content_lines = [];
+        const content_lines: string[] = [];
         while (index < lines.length && !TRANSLATE_MARKERS.has(lines[index])) {
             if (_find_next_post_start(lines, index, username, profile_only) && content_lines.length) {
                 break;
@@ -361,7 +375,7 @@ export function _parse_posts(lines, username, user_data, scraped_at) {
             index++;
         }
 
-        let metrics = [];
+        let metrics: string[] = [];
         while (index < lines.length) {
             if (_find_next_post_start(lines, index, username, profile_only) || stop_markers.has(lines[index])) {
                 break;
@@ -372,9 +386,12 @@ export function _parse_posts(lines, username, user_data, scraped_at) {
             index++;
         }
 
-        const trailing_metrics = [];
+        const trailing_metrics: string[] = [];
         while (content_lines.length && _is_metric_line(content_lines[content_lines.length - 1])) {
-            trailing_metrics.unshift(content_lines.pop());
+            const popped = content_lines.pop();
+            if (popped !== undefined) {
+                trailing_metrics.unshift(popped);
+            }
         }
         metrics = [...trailing_metrics, ...metrics];
 
@@ -402,7 +419,7 @@ export function _parse_posts(lines, username, user_data, scraped_at) {
     return posts;
 }
 
-export function _post_url_username(post_url) {
+export function _post_url_username(post_url: string): string | null {
     try {
         const parsed = new URL(post_url);
         const path_parts = parsed.pathname.split('/').filter(Boolean);
@@ -421,7 +438,7 @@ export function _post_url_username(post_url) {
     }
 }
 
-export function _profile_replies_url(profile_url, username) {
+export function _profile_replies_url(profile_url: string, username: string): string {
     try {
         const parsed = new URL(profile_url);
         return `${parsed.protocol}//${parsed.host}/@${username}/replies`;
@@ -430,16 +447,16 @@ export function _profile_replies_url(profile_url, username) {
     }
 }
 
-export function _same_post_text(left, right) {
+export function _same_post_text(left: string | null | undefined, right: string | null | undefined): boolean {
     if (typeof left !== 'string' || typeof right !== 'string') return false;
     const l = left.trim();
     const r = right.trim();
     return !!(l && r && (l === r || l.includes(r) || r.includes(l)));
 }
 
-export function _merge_text_posts_with_dom_posts(text_posts, dom_posts, max_posts) {
+export function _merge_text_posts_with_dom_posts(text_posts: ThreadPost[], dom_posts: ThreadPost[], max_posts: number): ThreadPost[] {
     const merged_posts = text_posts.map(post => ({ ...post }));
-    const used_dom_indexes = new Set();
+    const used_dom_indexes = new Set<number>();
 
     for (const text_post of merged_posts) {
         if (text_post.post_url) continue;
@@ -460,7 +477,7 @@ export function _merge_text_posts_with_dom_posts(text_posts, dom_posts, max_post
         }
     }
 
-    const seen_post_urls = new Set(merged_posts.map(p => p.post_url).filter(Boolean));
+    const seen_post_urls = new Set<string>(merged_posts.map(p => p.post_url).filter(Boolean) as string[]);
     const seen_texts = merged_posts.map(p => p.text);
 
     for (let i = 0; i < dom_posts.length; i++) {
@@ -484,19 +501,31 @@ export function _merge_text_posts_with_dom_posts(text_posts, dom_posts, max_post
     return merged_posts.slice(0, max_posts);
 }
 
-export function _has_reply_context(text) {
+export function _has_reply_context(text: string | null | undefined): boolean {
     if (typeof text !== 'string') return false;
     const markers = ["Replying to", "replied to", "回覆給", "回覆了", "回复给", "回复了"];
     return markers.some(m => text.includes(m));
 }
 
-export async function _extract_dom_posts(page, user_data, scraped_at, profile_username = null, exclude_reply_context = false) {
+interface EvaluatedCard {
+    url: string;
+    text: string;
+    contextText: string;
+}
+
+export async function _extract_dom_posts(
+    page: Page,
+    user_data: ActorInput,
+    scraped_at: Date,
+    profile_username: string | null = null,
+    exclude_reply_context = false
+): Promise<ThreadPost[]> {
     const cards = await page.evaluate(() => {
         const postUrlPattern = /^https:\/\/(www\.)?threads\.(com|net)\/(?:(@[^/]+)\/post|t|post)\/([^/?#]+)/;
-        const seen = new Set();
-        const cardsList = [];
+        const seen = new Set<string>();
+        const cardsList: EvaluatedCard[] = [];
 
-        const isVisible = (element) => {
+        const isVisible = (element: Element | null): boolean => {
             if (!element || !element.isConnected) return false;
             const style = window.getComputedStyle(element);
             if (style.visibility === 'hidden' || style.display === 'none' || Number(style.opacity) === 0) {
@@ -505,7 +534,8 @@ export async function _extract_dom_posts(page, user_data, scraped_at, profile_us
             return element.getClientRects().length > 0;
         };
 
-        const normalizePostUrl = (href) => {
+        const normalizePostUrl = (href: string | null): string | null => {
+            if (!href) return null;
             try {
                 const url = new URL(href, window.location.origin);
                 const match = url.href.match(postUrlPattern);
@@ -521,22 +551,18 @@ export async function _extract_dom_posts(page, user_data, scraped_at, profile_us
             }
         };
 
-        const candidateLinks = Array.from(document.querySelectorAll('a[href]'))
-            .map(element => ({ element, url: normalizePostUrl(element.getAttribute('href')) }))
-            .filter(item => item.url);
-
-        const cleanClone = (node) => {
-            const clone = node.cloneNode(true);
+        const cleanClone = (node: Element): string => {
+            const clone = node.cloneNode(true) as Element;
             clone.querySelectorAll('a[href]').forEach(link => {
                 if (link.querySelector('div') || link.querySelector('img') || link.querySelector('svg')) {
                     link.remove();
                 }
             });
-            return (clone.innerText || '').trim();
+            return (clone.textContent || '').trim();
         };
 
-        const findCardTextForLink = (element, url) => {
-            let node = element;
+        const findCardTextForLink = (element: Element, url: string) => {
+            let node: Element | null = element;
             for (let depth = 0; node && depth < 10; depth++, node = node.parentElement) {
                 if (!isVisible(node)) continue;
 
@@ -550,19 +576,23 @@ export async function _extract_dom_posts(page, user_data, scraped_at, profile_us
                 const postUrls = Array.from(new Set(
                     Array.from(node.querySelectorAll('a[href]'))
                         .map(link => normalizePostUrl(link.getAttribute('href')))
-                        .filter(Boolean)
+                        .filter(Boolean) as string[]
                 ));
 
                 if (postUrls.length >= 1 && postUrls[0] === url) {
                     const article = element.closest('[role="article"]');
                     const contextText = article && isVisible(article)
-                        ? (article.innerText || '').trim()
+                        ? (article.textContent || '').trim()
                         : textVal;
                     return { text: textVal, contextText, postUrls };
                 }
             }
             return null;
         };
+
+        const candidateLinks = Array.from(document.querySelectorAll('a[href]'))
+            .map(element => ({ element, url: normalizePostUrl(element.getAttribute('href')) }))
+            .filter((item): item is { element: Element; url: string } => item.url !== null);
 
         for (const { element, url } of candidateLinks) {
             if (seen.has(url)) continue;
@@ -579,8 +609,8 @@ export async function _extract_dom_posts(page, user_data, scraped_at, profile_us
         return cardsList;
     });
 
-    const max_posts = parseInt(user_data.maxPostsPerAccount || 10, 10);
-    const posts = [];
+    const max_posts = parseInt(String(user_data.maxPostsPerAccount || 10), 10);
+    const posts: ThreadPost[] = [];
 
     for (const card of cards) {
         if (!card || typeof card.url !== 'string' || typeof card.text !== 'string') continue;
@@ -614,13 +644,15 @@ export async function _extract_dom_posts(page, user_data, scraped_at, profile_us
     return posts;
 }
 
-export async function _extract_profile_results(page) {
+export async function _extract_profile_results(page: Page): Promise<ProfileSearchResult[]> {
     return page.evaluate(() => {
-        const byUrl = new Map();
+        const byUrl = new Map<string, ProfileSearchResult>();
         for (const element of document.querySelectorAll('a[href]')) {
-            let url;
+            let url: URL;
+            const href = element.getAttribute('href');
+            if (!href) continue;
             try {
-                url = new URL(element.getAttribute('href'), window.location.origin);
+                url = new URL(href, window.location.origin);
             } catch {
                 continue;
             }
@@ -630,7 +662,7 @@ export async function _extract_profile_results(page) {
 
             const profileUrl = `${url.origin}${url.pathname.replace(/\/$/, '')}`;
             const username = url.pathname.replace(/^\/@/, '').replace(/\/$/, '');
-            const text = (element.innerText || element.getAttribute('aria-label') || '').trim();
+            const text = (element.textContent || element.getAttribute('aria-label') || '').trim();
             if (!byUrl.has(profileUrl)) {
                 byUrl.set(profileUrl, { username, url: profileUrl, text: text || null });
             }
@@ -639,7 +671,7 @@ export async function _extract_profile_results(page) {
     });
 }
 
-export function _empty_profile() {
+export function _empty_profile(): ThreadProfile {
     return {
         username: null,
         display_name: null,
@@ -649,10 +681,11 @@ export function _empty_profile() {
     };
 }
 
-export async function _remove_link_preview_cards(page) {
+export async function _remove_link_preview_cards(page: Page): Promise<void> {
     try {
         await page.evaluate(() => {
-            const isExternal = (href) => {
+            const isExternal = (href: string | null): boolean => {
+                if (!href) return false;
                 try {
                     const url = new URL(href, window.location.origin);
                     return !/(www\.)?threads\.(com|net)$/.test(url.hostname);
@@ -666,34 +699,34 @@ export async function _remove_link_preview_cards(page) {
                 }
             });
         });
-    } catch (e) {
+    } catch (e: any) {
         console.warn(`Failed to remove link preview cards from DOM: ${e.message}`);
     }
 }
 
-export async function _expand_truncated_posts(page) {
+export async function _expand_truncated_posts(page: Page): Promise<void> {
     try {
         await page.evaluate(() => {
-            const targetTexts = new Set(['more', '更多', '顯示更多', '显示更多']);
+            const targetTexts = new Set<string>(['more', '更多', '顯示更多', '显示更多']);
             const elements = Array.from(document.querySelectorAll('div, span, button, [role="button"]'));
             for (const el of elements) {
                 if (el.children.length > 0) continue;
-                const text = (el.textContent || el.innerText || '').trim().toLowerCase();
+                const text = (el.textContent || '').trim().toLowerCase();
                 if (targetTexts.has(text)) {
                     try {
-                        el.click();
+                        (el as HTMLElement).click();
                     } catch (e) {
                         // ignore
                     }
                 }
             }
         });
-    } catch (e) {
+    } catch (e: any) {
         console.warn(`Failed to expand truncated posts: ${e.message}`);
     }
 }
 
-export async function _save_debug_artifacts(page, requestUrl, suffix) {
+export async function _save_debug_artifacts(page: Page, requestUrl: string, suffix: string): Promise<void> {
     try {
         const parsed = new URL(requestUrl);
         const path_slug = parsed.pathname.replace(/^\/|\/$/g, '').replace(/\//g, '_').replace(/@/g, '') || "root";
@@ -706,7 +739,7 @@ export async function _save_debug_artifacts(page, requestUrl, suffix) {
         await Actor.setValue(`${key_base}_html`, html_content, { contentType: 'text/html' });
 
         console.log(`Saved debug artifacts. Keys: '${key_base}_screenshot' (PNG), '${key_base}_html' (HTML).`);
-    } catch (e) {
+    } catch (e: any) {
         console.error(`Failed to save debug artifacts for ${suffix}: ${e.message}`);
     }
 }

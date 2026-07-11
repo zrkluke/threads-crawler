@@ -2,21 +2,25 @@
   "name": "threads-crawler",
   "version": "1.0.0",
   "type": "module",
-  "main": "src/main.js",
+  "main": "dist/main.js",
   "dependencies": {
-    "apify": "^3.2.0",
-    "crawlee": "^3.11.0",
     "@crawlee/playwright": "^3.11.0",
-    "playwright": "<1.60.0",
+    "apify": "^3.2.0",
+    "axios": "^1.6.0",
     "camoufox-js": "^0.11.1",
-    "axios": "^1.6.0"
+    "crawlee": "^3.11.0",
+    "playwright": "<1.60.0"
   },
   "devDependencies": {
-    "jest": "^29.7.0"
+    "@types/axios": "^0.9.36",
+    "@types/node": "^26.1.1",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
   },
   "scripts": {
-    "start": "node src/main.js",
-    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js tests/routes.test.js --verbose",
-    "test:live": "node --experimental-vm-modules node_modules/jest/bin/jest.js tests/live.test.js --verbose"
+    "build": "tsc",
+    "start": "npm run build && node dist/main.js",
+    "test": "vitest run tests/routes.test.ts",
+    "test:live": "vitest run tests/live.test.ts"
   }
 }
