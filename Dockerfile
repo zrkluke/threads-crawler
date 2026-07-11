@@ -1,32 +1,17 @@
-# First, specify the base Docker image.
-# You can see the Docker images from Apify at https://hub.docker.com/r/apify/.
-# You can also use any other image from Docker Hub.
-FROM apify/actor-python-playwright-camoufox:3.14-1.59.0
+# Use the Apify base image for Node.js Playwright Firefox
+FROM apify/actor-node-playwright-firefox:20
 
-# Second, copy just requirements.txt into the Actor image,
-# since it should be the only file that affects the dependency install in the next step,
-# in order to speed up the build
-COPY --chown=myuser:myuser requirements.txt ./
+# Copy package.json and package-lock.json first
+COPY package*.json ./
 
-# Install the packages specified in requirements.txt,
-# Print the installed Python version, pip version
-# and all installed packages with their versions for debugging
-RUN echo "Python version:" \
- && python --version \
- && echo "Pip version:" \
- && pip --version \
- && echo "Installing dependencies:" \
- && pip install -r requirements.txt \
- && echo "All installed Python packages:" \
- && pip freeze
+# Install npm dependencies
+RUN npm install --quiet --omit=dev
 
-# Next, copy the remaining files and directories with the source code.
-# Since we do this after installing the dependencies, quick build will be really fast
-# for most source file changes.
-COPY --chown=myuser:myuser . ./
+# Copy the rest of the source code
+COPY . .
 
-# Use compileall to ensure the runnability of the Actor Python code.
-RUN python -m compileall -q my_actor/
+# Download the Camoufox browser binary
+RUN npx camoufox-js fetch
 
-# Specify how to launch the source code of your Actor.
-CMD ["python", "-m", "my_actor"]
+# Specify the launch command
+CMD ["npm", "start"]
