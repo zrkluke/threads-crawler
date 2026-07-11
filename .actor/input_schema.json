@@ -144,6 +144,13 @@
             "editor": "checkbox",
             "default": false
         },
+        "cookies": {
+            "title": "Session cookies",
+            "description": "Optional session cookies JSON array. Copy cookies from your browser while logged into Threads (using extensions like EditThisCookie) to crawl personalized feeds or avoid login walls.",
+            "type": "array",
+            "editor": "json",
+            "sectionCaption": "Authentication"
+        },
         "telegramToken": {
             "title": "Telegram bot token",
             "description": "Optional Telegram Bot Token. If set, results will be sent to the Telegram chat.",

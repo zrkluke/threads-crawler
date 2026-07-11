@@ -63,6 +63,38 @@ def _urls_from_request_list(items: list[dict[str, str]] | None) -> list[str]:
     return [item["url"] for item in items or [] if item.get("url")]
 
 
+def _normalize_cookies(cookies: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    normalized = []
+    for c in cookies:
+        if not isinstance(c, dict):
+            continue
+        cookie = {
+            "name": c.get("name"),
+            "value": c.get("value"),
+            "domain": c.get("domain"),
+            "path": c.get("path", "/"),
+            "httpOnly": c.get("httpOnly", False),
+            "secure": c.get("secure", False),
+        }
+        if "expirationDate" in c:
+            cookie["expires"] = c["expirationDate"]
+        elif "expires" in c:
+            cookie["expires"] = c["expires"]
+
+        same_site = c.get("sameSite")
+        if same_site:
+            same_site_str = str(same_site).lower()
+            if same_site_str == "no_restriction":
+                cookie["sameSite"] = "None"
+            elif same_site_str in {"lax", "strict", "none"}:
+                cookie["sameSite"] = same_site_str.capitalize()
+
+        # Remove keys with None values
+        cookie = {k: v for k, v in cookie.items() if v is not None}
+        normalized.append(cookie)
+    return normalized
+
+
 def _build_search_url(keyword: str, search_sort: str) -> str:
     url = f"{THREADS_BASE_URL}/search?q={quote(keyword)}&serp_type=default"
     search_filter = SEARCH_FILTER_BY_SORT.get(search_sort)
@@ -136,7 +168,10 @@ def _build_requests(actor_input: dict[str, Any]) -> list[Request]:
             requests.append(Request.from_url(url, user_data={**common_user_data, "target": url}))
 
     elif mode == "feed":
-        for url in _dedupe(_urls_from_request_list(actor_input.get("feedUrls"))):
+        feed_urls = _urls_from_request_list(actor_input.get("feedUrls"))
+        if not feed_urls:
+            feed_urls = [THREADS_BASE_URL]
+        for url in _dedupe(feed_urls):
             requests.append(Request.from_url(url, user_data={**common_user_data, "target": url}))
 
     return requests
@@ -190,8 +225,16 @@ async def main() -> None:
         )
 
         @crawler.pre_navigation_hook
-        async def block_static_assets(context: PlaywrightPreNavCrawlingContext) -> None:
+        async def prepare_browser_session(context: PlaywrightPreNavCrawlingContext) -> None:
             await context.block_requests()
+            cookies = actor_input.get("cookies")
+            if cookies:
+                Actor.log.info("Injecting session cookies into browser context...")
+                try:
+                    normalized = _normalize_cookies(cookies)
+                    await context.page.context.add_cookies(normalized)
+                except Exception as e:
+                    Actor.log.error(f"Failed to inject session cookies: {e}")
 
         # Run the crawler with the starting requests.
         await crawler.run(requests)

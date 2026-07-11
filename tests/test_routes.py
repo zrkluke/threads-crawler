@@ -254,3 +254,49 @@ def test_language_filter_any_accepts_all():
     assert _matches_post_language_filter("Hello world", "any") is True
     assert _matches_post_language_filter("這是繁體中文", "any") is True
     assert _matches_post_language_filter("这是简体中文", "any") is True
+
+
+def test_normalize_cookies():
+    from my_actor.main import _normalize_cookies
+
+    raw = [
+        "not-a-dict-should-be-ignored",
+        {
+            "name": "sessionid",
+            "value": "secret123",
+            "domain": ".threads.net",
+            "path": "/",
+            "expirationDate": 1234567.89,
+            "httpOnly": True,
+            "secure": True,
+            "sameSite": "no_restriction"
+        },
+        {
+            "name": "mid",
+            "value": "mid123",
+            "domain": ".threads.net",
+            "expires": 987654.32,
+            "sameSite": "lax"
+        }
+    ]
+
+    normalized = _normalize_cookies(raw)
+    assert len(normalized) == 2
+
+    c1 = normalized[0]
+    assert c1["name"] == "sessionid"
+    assert c1["value"] == "secret123"
+    assert c1["domain"] == ".threads.net"
+    assert c1["path"] == "/"
+    assert c1["expires"] == 1234567.89
+    assert c1["httpOnly"] is True
+    assert c1["secure"] is True
+    assert c1["sameSite"] == "None"
+
+    c2 = normalized[1]
+    assert c2["name"] == "mid"
+    assert c2["value"] == "mid123"
+    assert c2["domain"] == ".threads.net"
+    assert c2["path"] == "/" # defaults to "/"
+    assert c2["expires"] == 987654.32
+    assert c2["sameSite"] == "Lax"
