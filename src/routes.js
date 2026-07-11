@@ -525,22 +525,22 @@ export async function _extract_dom_posts(page, user_data, scraped_at, profile_us
             .map(element => ({ element, url: normalizePostUrl(element.getAttribute('href')) }))
             .filter(item => item.url);
 
-        for (const { element, url } of candidateLinks) {
-            if (seen.has(url)) continue;
-            if (!isVisible(element)) continue;
+        const cleanClone = (node) => {
+            const clone = node.cloneNode(true);
+            clone.querySelectorAll('a[href]').forEach(link => {
+                if (link.querySelector('div') || link.querySelector('img') || link.querySelector('svg')) {
+                    link.remove();
+                }
+            });
+            return (clone.innerText || '').trim();
+        };
 
+        const findCardTextForLink = (element, url) => {
             let node = element;
             for (let depth = 0; node && depth < 10; depth++, node = node.parentElement) {
                 if (!isVisible(node)) continue;
 
-                const clone = node.cloneNode(true);
-                clone.querySelectorAll('a[href]').forEach(link => {
-                    if (link.querySelector('div') || link.querySelector('img') || link.querySelector('svg')) {
-                        link.remove();
-                    }
-                });
-
-                const textVal = (clone.innerText || '').trim();
+                const textVal = cleanClone(node);
                 if (!textVal) continue;
 
                 const linesList = textVal.split('\n').map(line => line.trim()).filter(Boolean);
@@ -558,11 +558,21 @@ export async function _extract_dom_posts(page, user_data, scraped_at, profile_us
                     const contextText = article && isVisible(article)
                         ? (article.innerText || '').trim()
                         : textVal;
-                    cardsList.push({ url, text: textVal, contextText });
-                    for (const pUrl of postUrls) {
-                        seen.add(pUrl);
-                    }
-                    break;
+                    return { text: textVal, contextText, postUrls };
+                }
+            }
+            return null;
+        };
+
+        for (const { element, url } of candidateLinks) {
+            if (seen.has(url)) continue;
+            if (!isVisible(element)) continue;
+
+            const cardInfo = findCardTextForLink(element, url);
+            if (cardInfo) {
+                cardsList.push({ url, text: cardInfo.text, contextText: cardInfo.contextText });
+                for (const pUrl of cardInfo.postUrls) {
+                    seen.add(pUrl);
                 }
             }
         }

@@ -1,4 +1,6 @@
 import { Actor } from 'apify';
+import { fileURLToPath } from 'url';
+import path from 'path';
 import { PlaywrightCrawler } from '@crawlee/playwright';
 import { launchOptions as camoufoxLaunchOptions } from 'camoufox-js';
 import { firefox } from 'playwright';
@@ -103,12 +105,10 @@ export function _normalize_cookies(cookies) {
         }
         
         // Remove keys with undefined or null values
-        for (const key of Object.keys(cookie)) {
-            if (cookie[key] === undefined || cookie[key] === null) {
-                delete cookie[key];
-            }
-        }
-        normalized.push(cookie);
+        const cleanCookie = Object.fromEntries(
+            Object.entries(cookie).filter(([_, v]) => v !== null && v !== undefined)
+        );
+        normalized.push(cleanCookie);
     }
     return normalized;
 }
@@ -312,22 +312,30 @@ async function main() {
 
     const crawler = new PlaywrightCrawler({
         maxRequestsPerCrawl: requests.length,
-        concurrencySettings: {
-            minConcurrency: 1,
-            maxConcurrency: 1,
-            desiredConcurrency: 1,
-        },
+        minConcurrency: 1,
+        maxConcurrency: 1,
         launchContext: {
             launcher: firefox,
+            useIncognitoPages: true,
             launchOptions: {
                 ...camoufoxOptions,
             },
         },
         browserPoolOptions: {
-            browserNewContextOptions: ZH_TW_CONTEXT_OPTIONS,
+            prePageCreateHooks: [
+                (pageId, browserController, pageOptions) => {
+                    if (pageOptions) {
+                        pageOptions.locale = "zh-TW";
+                        pageOptions.timezoneId = "Asia/Taipei";
+                    }
+                },
+            ],
         },
         preNavigationHooks: [
             async (crawlingContext) => {
+                await crawlingContext.page.setExtraHTTPHeaders({
+                    "Accept-Language": "zh-TW,zh;q=0.9,en-US;q=0.6,en;q=0.4",
+                });
                 await crawlingContext.blockRequests();
                 const cookies = actor_input.cookies;
                 if (cookies && cookies.length > 0) {
@@ -477,6 +485,7 @@ async function main() {
     await Actor.exit();
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+const isMain = process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
+if (isMain) {
     main();
 }
