@@ -19,7 +19,7 @@
   },
   "scripts": {
     "build": "tsc",
-    "start": "npm run build && node dist/main.js",
+    "start": "node dist/main.js",
     "test": "vitest run tests/routes.test.ts",
     "test:live": "vitest run tests/live.test.ts"
   }
