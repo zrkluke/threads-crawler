@@ -1,21 +1,22 @@
 # Threads Crawler
 
-An Apify Actor for scraping publicly visible Threads pages with Python, Crawlee, Playwright, and Camoufox.
+An Apify Actor for scraping Threads pages with Node.js (JavaScript ESM), Crawlee, Playwright, and Camoufox.
 
-The Actor is designed for local development and Apify deployment through GitHub. It loads dynamic Threads pages in a Camoufox browser, extracts visible profile and post data, and stores structured results in an Apify dataset.
+The Actor is designed for local development and Apify deployment. It loads dynamic Threads pages in a Camoufox browser, extracts visible profile and post data, and stores structured results in an Apify dataset. It also supports optional session cookie injection to bypass login walls and crawl personalized "For you" feeds.
 
-The browser context defaults to Traditional Chinese / Taiwan signals (`zh-TW`, `Asia/Taipei`, and `Accept-Language: zh-TW`) so unauthenticated Threads search is closer to a Traditional Chinese browsing session.
+The browser context defaults to Traditional Chinese / Taiwan signals (`zh-TW`, `Asia/Taipei`, and `Accept-Language: zh-TW`) so Threads search is closer to a Traditional Chinese browsing session.
 
 ## Features
 
 - Crawl publicly visible Threads profile pages.
 - Batch crawl up to 100 accounts in one run.
+- Support Session Cookies to bypass login walls and crawl personalized recommended feeds ("For you" wall).
 - Support five crawl modes:
   - Profile pages by username.
   - Tag / topic pages.
   - Keyword search pages.
-  - Single thread / post URLs, including publicly visible replies.
-  - Custom Threads feed URLs.
+  - Single thread / post URLs, including replies.
+  - Custom Threads feed URLs (defaults to Threads home recommended feed).
 - Support username input with or without `@`.
 - Support tags with or without `#`.
 - Support bulk paste fields for accounts and keywords.
@@ -28,34 +29,25 @@ The browser context defaults to Traditional Chinese / Taiwan signals (`zh-TW`, `
   - bio
   - external URL
   - follower count
-- Extract visible post data:
+- Extract post data:
   - author
   - relative timestamp
   - best-effort ISO timestamp
-  - post text
-  - `post_url` when Threads exposes a public post link in the page
+  - post text (expanded to complete text automatically)
+  - `post_url`
   - visible metrics
-- Optional raw visible text output for parser debugging.
+- Send clean Telegram reports (without metrics and emojis, showing full text).
+- Daily live monitor integration test via GitHub Actions to detect Threads layout changes.
 
-## Important Limitations
+## Session Cookies (Authentication)
 
-This Actor does not log in to Threads and does not use a private API token. It only extracts data that Threads renders publicly in the browser.
+To crawl personalized feeds or bypass login walls:
+1. Log in to Threads in your browser (e.g., Chrome).
+2. Use an extension like `EditThisCookie` or `Cookie-Editor` to export your cookies as a **JSON array**.
+3. Paste the JSON array into the `Session cookies` (`cookies`) input field in your Apify Console (or inside your local `INPUT.json`).
+4. Set the mode to `feed` and leave the feed URLs empty to crawl your personal recommended feed.
 
-Because of that:
-
-- Full historical posts may not be available. Threads can show `Log in to see more`.
-- Replies are only extracted when they are publicly visible on the loaded page.
-- Engagement fields depend on what the public page exposes.
-- `likes`, `replies`, `reposts`, `shares`, `views`, and `quotes` are best-effort mappings from visible metric numbers.
-- Some metrics may be `null` if Threads does not expose them publicly.
-- ISO timestamps are estimated from relative timestamps such as `12h`, `1d`, or `3w` using the scrape time.
-- Post URLs are extracted best-effort from public page links. If Threads hides or changes those links, `posts[].post_url` can be empty.
-- `posts[].post_url` is extracted from the same visible DOM card as the post text. The Actor avoids attaching unrelated post links when a card cannot be matched.
-- Permanent IDs and deeper media metadata may require additional parser work.
-- Threads page structure can change, which may require selector/parser updates.
-- Camoufox reduces common automation fingerprints, but it does not guarantee access or bypass platform limits.
-
-Use this Actor only for public data and make sure your usage complies with applicable laws, Threads terms, and Apify platform rules.
+Your cookies are encrypted on Apify and stay private to your run session.
 
 ## Input
 
@@ -133,7 +125,7 @@ Or use `bulkAccounts`:
   "mode": "thread",
   "threadUrls": [
     {
-      "url": "https://www.threads.com/@largitdata/post/POST_ID"
+      "url": "https://www.threads.net/@largitdata/post/POST_ID"
     }
   ],
   "maxPostsPerAccount": 10
@@ -145,14 +137,12 @@ Or use `bulkAccounts`:
 ```json
 {
   "mode": "feed",
-  "feedUrls": [
-    {
-      "url": "https://www.threads.com/"
-    }
-  ],
+  "cookies": [ /* JSON cookies from EditThisCookie */ ],
   "maxPostsPerAccount": 10
 }
 ```
+
+*Note: Leaving `feedUrls` empty in `feed` mode will automatically crawl the Threads home feed.*
 
 ### Date Filters
 
@@ -201,7 +191,7 @@ Example shape:
 
 ```json
 {
-  "url": "https://www.threads.com/@largitdata",
+  "url": "https://www.threads.net/@largitdata",
   "mode": "profile",
   "target": "largitdata",
   "scraped_at": "2026-05-12T06:44:40.405672+00:00",
@@ -218,7 +208,7 @@ Example shape:
       "author": "largitdata",
       "posted_at": "15h",
       "posted_at_iso": "2026-05-11T15:44:40.405672+00:00",
-      "post_url": "https://www.threads.com/@largitdata/post/POST_ID",
+      "post_url": "https://www.threads.net/@largitdata/post/POST_ID",
       "text": "...",
       "metrics": {
         "likes": "10",
@@ -248,39 +238,28 @@ Install the Apify CLI:
 npm install -g apify-cli
 ```
 
-Create and activate a Python virtual environment:
+Install dependencies and fetch the Camoufox Firefox binary:
 
 ```bash
-python -m venv .venv
-.venv\Scripts\activate
-```
-
-Install dependencies:
-
-```bash
-python -m pip install -r requirements.txt
-python -m pip install -r requirements-dev.txt
+npm install
+npx camoufox-js fetch
 ```
 
 Run locally:
 
 ```bash
-apify run --purge
+apify run
 ```
 
-Run local quality checks:
-
-```powershell
-.\scripts\verify.ps1
-```
-
-Enable the pre-commit hook:
+Run tests:
 
 ```bash
-pre-commit install
-```
+# Run unit tests on static body fixtures
+npm test
 
-The pre-commit hook runs Ruff lint, Ruff format check, and mypy before commits. Use `scripts/verify.ps1` as the same post-edit verification command in your editor or agent workflow.
+# Run live layout integration test
+npm run test:live
+```
 
 Local test input is stored in:
 
@@ -294,7 +273,7 @@ Local dataset output is stored in:
 storage/datasets/default/
 ```
 
-The `storage/` and `.venv/` directories are ignored by Git.
+The `storage/` directory is ignored by Git.
 
 ## Deploy to Apify
 
@@ -313,21 +292,10 @@ apify login
 apify push
 ```
 
-GitHub deployment is recommended because it keeps version history and makes future parser updates easier to review.
-
 ## Tech Stack
 
-- Apify Python SDK
-- Crawlee for Python
+- Apify SDK for JavaScript
+- Crawlee for JavaScript (Playwright)
 - Playwright
-- Camoufox
-- Python 3.12+
-
-## Notes for Future Improvements
-
-- Add deeper scrolling for profiles and feed pages.
-- Improve single-thread reply parsing.
-- Extract stable post URLs and IDs.
-- Map metric numbers to labels more reliably by inspecting DOM structure.
-- Add optional authenticated session support for private internal use cases.
-- Add tests around parser behavior using saved page text fixtures.
+- Camoufox-js
+- Node.js 22+
