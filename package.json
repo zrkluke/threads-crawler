@@ -20,7 +20,7 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/main.js",
-    "test": "vitest run tests/routes.test.ts",
+    "test": "vitest run tests/routes.test.ts tests/camoufox.test.ts",
     "test:live": "vitest run tests/live.test.ts"
   }
 }
