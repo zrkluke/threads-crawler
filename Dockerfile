@@ -22,8 +22,11 @@ COPY --from=builder --chown=myuser:myuser /home/myuser/dist ./dist
 COPY --chown=myuser:myuser package*.json ./
 RUN npm install --quiet --omit=dev
 
-# Download the Camoufox browser binary
-RUN npx camoufox-js fetch
+# Download the Camoufox browser binary (explicitly override PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD to allow fetching during build)
+RUN PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=0 npx camoufox-js fetch
+
+# Validate the installation (smoke test)
+RUN PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=0 node -e "import('camoufox-js').then(m => m.launchOptions({headless:true}))"
 
 # Run the project using the compiled JavaScript output
 CMD ["node", "dist/main.js"]
