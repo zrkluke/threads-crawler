@@ -12,6 +12,9 @@ RUN npm run build
 # Stage 2: Create the final production image
 FROM apify/actor-node-playwright-firefox:22
 
+# Set Camoufox installation directory
+ENV CAMOUFOX_INSTALL_DIR=/home/myuser/camoufox-cache
+
 # Copy only the compiled output from the builder stage
 COPY --from=builder --chown=myuser:myuser /home/myuser/dist ./dist
 
