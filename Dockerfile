@@ -12,8 +12,10 @@ RUN npm run build
 # Stage 2: Create the final production image
 FROM apify/actor-node-playwright-firefox:22
 
+USER root
+
 # Set Camoufox installation directory
-ENV CAMOUFOX_INSTALL_DIR=/home/myuser/camoufox-cache
+ENV CAMOUFOX_INSTALL_DIR=/opt/camoufox
 
 # Copy only the compiled output from the builder stage
 COPY --from=builder --chown=myuser:myuser /home/myuser/dist ./dist
@@ -24,6 +26,12 @@ RUN npm install --quiet --omit=dev
 
 # Download the Camoufox browser binary (explicitly override PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD to allow fetching during build)
 RUN PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=0 npx camoufox-js fetch
+
+# Ensure the app user has permissions
+RUN chown -R myuser:myuser /opt/camoufox
+
+# Switch back to the required non-root user
+USER myuser
 
 # Validate the installation (smoke test)
 RUN PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=0 node -e "import('camoufox-js').then(m => m.launchOptions({headless:true}))"
