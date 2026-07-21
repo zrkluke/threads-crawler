@@ -483,5 +483,8 @@ async function main() {
 
 const isMain = process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
 if (isMain) {
-    main();
+    main().catch(async (err) => {
+        console.error(`Fatal crawler error occurred: ${err.stack || err.message}`);
+        await Actor.exit();
+    });
 }

@@ -143,8 +143,8 @@ export function _parse_relative_datetime(value: string, scraped_at: Date): strin
         else if (unit === '小時') d.setHours(d.getHours() - amount);
         else if (unit === '天' || unit === '日') d.setDate(d.getDate() - amount);
         else if (unit === '週' || unit === '周') d.setDate(d.getDate() - amount * 7);
-        else if (unit === '月') d.setDate(d.getDate() - amount * 30);
-        else if (unit === '年') d.setDate(d.getDate() - amount * 365);
+        else if (unit === '月') d.setMonth(d.getMonth() - amount);
+        else if (unit === '年') d.setFullYear(d.getFullYear() - amount);
         return d.toISOString();
     }
 
@@ -163,8 +163,8 @@ export function _parse_relative_window(value: string | undefined, scraped_at: Da
     else if (['hour', '小時'].includes(unit)) d.setHours(d.getHours() - amount);
     else if (['day', '天', '日'].includes(unit)) d.setDate(d.getDate() - amount);
     else if (['week', '週', '周'].includes(unit)) d.setDate(d.getDate() - amount * 7);
-    else if (['month', '月'].includes(unit)) d.setDate(d.getDate() - amount * 30);
-    else d.setDate(d.getDate() - amount * 365);
+    else if (['month', '月'].includes(unit)) d.setMonth(d.getMonth() - amount);
+    else d.setFullYear(d.getFullYear() - amount);
     return d;
 }
 
@@ -206,7 +206,12 @@ export function _parse_visible_metrics(values: string[]): ThreadMetrics {
 }
 
 export function _parse_profile(lines: string[]): ThreadProfile {
-    const username = lines[0] || null;
+    const firstLine = (lines[0] || "").trim();
+    const isValidUsername = !!(firstLine
+        && !GLOBAL_STOP_MARKERS.has(firstLine)
+        && !NON_AUTHOR_LINES.has(firstLine)
+        && /^[a-zA-Z0-9._]+$/.test(firstLine));
+    const username = isValidUsername ? firstLine : null;
     const profile: ThreadProfile = {
         username,
         display_name: null,
@@ -228,6 +233,12 @@ export function _parse_profile(lines: string[]): ThreadProfile {
     let repeated_username_count = 0;
     const bio_lines: string[] = [];
 
+    // Localization labels for buttons and UI elements that should not leak into bio
+    const EXCLUDED_BIO_LABELS = new Set<string>([
+        "Follow", "Following", "Mention", "Share",
+        "追蹤", "追蹤中", "關注", "已關注", "关注", "已关注", "提及", "分享"
+    ]);
+
     for (const line of header_lines) {
         if (line === username) {
             repeated_username_count++;
@@ -236,7 +247,15 @@ export function _parse_profile(lines: string[]): ThreadProfile {
             }
             continue;
         }
-        if (line.endsWith('followers')) {
+
+        const lowerLine = line.toLowerCase().trim();
+        const isFollowersLine = lowerLine.endsWith('followers')
+            || lowerLine.endsWith('位粉絲')
+            || lowerLine.endsWith('位粉丝')
+            || lowerLine.endsWith('粉絲')
+            || lowerLine.endsWith('粉丝');
+
+        if (isFollowersLine) {
             profile.followers = line;
             continue;
         }
@@ -244,7 +263,7 @@ export function _parse_profile(lines: string[]): ThreadProfile {
             profile.external_url = line;
             continue;
         }
-        if (!['Follow', 'Mention', ...PROFILE_TABS].includes(line)) {
+        if (!EXCLUDED_BIO_LABELS.has(line) && !PROFILE_TABS.has(line)) {
             bio_lines.push(line);
         }
     }
@@ -729,8 +748,9 @@ export async function _expand_truncated_posts(page: Page): Promise<void> {
 export async function _save_debug_artifacts(page: Page, requestUrl: string, suffix: string): Promise<void> {
     try {
         const parsed = new URL(requestUrl);
-        const path_slug = parsed.pathname.replace(/^\/|\/$/g, '').replace(/\//g, '_').replace(/@/g, '') || "root";
-        const key_base = `DEBUG_${path_slug}_${suffix}`;
+        const raw_slug = parsed.pathname.replace(/^\/|\/$/g, '').replace(/\//g, '_').replace(/@/g, '') || "root";
+        const sanitized_slug = raw_slug.replace(/[^a-zA-Z0-9!_\-.'()]/g, '_');
+        const key_base = `DEBUG_${sanitized_slug}_${suffix}`.replace(/[^a-zA-Z0-9!_\-.'()]/g, '_').slice(0, 200);
 
         const screenshot_png = await page.screenshot({ fullPage: false });
         await Actor.setValue(`${key_base}_screenshot`, screenshot_png, { contentType: 'image/png' });
