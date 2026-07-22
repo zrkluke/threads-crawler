@@ -12,7 +12,7 @@ describe('Threads Live Layout Integration Test', () => {
             timezoneId: "Asia/Taipei",
         });
         const page = await context.newPage();
-        await page.goto("https://www.threads.net/@largitdata");
+        await page.goto("https://www.threads.com/@largitdata");
         await page.waitForLoadState("domcontentloaded");
         await page.waitForTimeout(8000);
 

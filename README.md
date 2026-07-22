@@ -125,7 +125,7 @@ Or use `bulkAccounts`:
   "mode": "thread",
   "threadUrls": [
     {
-      "url": "https://www.threads.net/@largitdata/post/POST_ID"
+      "url": "https://www.threads.com/@largitdata/post/POST_ID"
     }
   ],
   "maxPostsPerAccount": 10
@@ -191,7 +191,7 @@ Example shape:
 
 ```json
 {
-  "url": "https://www.threads.net/@largitdata",
+  "url": "https://www.threads.com/@largitdata",
   "mode": "profile",
   "target": "largitdata",
   "scraped_at": "2026-05-12T06:44:40.405672+00:00",
@@ -208,7 +208,7 @@ Example shape:
       "author": "largitdata",
       "posted_at": "15h",
       "posted_at_iso": "2026-05-11T15:44:40.405672+00:00",
-      "post_url": "https://www.threads.net/@largitdata/post/POST_ID",
+      "post_url": "https://www.threads.com/@largitdata/post/POST_ID",
       "text": "...",
       "metrics": {
         "likes": "10",

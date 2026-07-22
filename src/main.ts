@@ -339,7 +339,6 @@ async function main() {
                 await crawlingContext.page.setExtraHTTPHeaders({
                     "Accept-Language": "zh-TW,zh;q=0.9,en-US;q=0.6,en;q=0.4",
                 });
-                await crawlingContext.blockRequests();
                 const cookies = actor_input.cookies;
                 if (cookies && cookies.length > 0) {
                     console.log("Injecting session cookies into browser context...");

@@ -185,7 +185,7 @@ describe('Threads Parser Unit Tests', () => {
             {
                 name: "sessionid",
                 value: "secret123",
-                domain: ".threads.net",
+                domain: ".threads.com",
                 path: "/",
                 expirationDate: 1234567.89,
                 httpOnly: true,
@@ -195,7 +195,7 @@ describe('Threads Parser Unit Tests', () => {
             {
                 name: "mid",
                 value: "mid123",
-                domain: ".threads.net",
+                domain: ".threads.com",
                 expires: 987654.32,
                 sameSite: "lax"
             }
@@ -207,7 +207,7 @@ describe('Threads Parser Unit Tests', () => {
         const c1 = normalized[0];
         expect(c1.name).toBe("sessionid");
         expect(c1.value).toBe("secret123");
-        expect(c1.domain).toBe(".threads.net");
+        expect(c1.domain).toBe(".threads.com");
         expect(c1.path).toBe("/");
         expect(c1.expires).toBe(1234567.89);
         expect(c1.httpOnly).toBe(true);
@@ -217,7 +217,7 @@ describe('Threads Parser Unit Tests', () => {
         const c2 = normalized[1];
         expect(c2.name).toBe("mid");
         expect(c2.value).toBe("mid123");
-        expect(c2.domain).toBe(".threads.net");
+        expect(c2.domain).toBe(".threads.com");
         expect(c2.path).toBe("/"); // defaults to "/"
         expect(c2.expires).toBe(987654.32);
         expect(c2.sameSite).toBe("Lax");
@@ -253,7 +253,7 @@ describe('Threads Parser Unit Tests', () => {
                 posted_at: '2h',
                 posted_at_iso: '2026-07-22T12:00:00.000Z',
                 text: '最近Codex的額度用完了，不敢用重設限額...',
-                post_url: 'https://www.threads.net/@user_a/post/C123456789',
+                post_url: 'https://www.threads.com/@user_a/post/C123456789',
                 metrics: { likes: null, replies: null, reposts: null, shares: null, views: null, quotes: null, raw: [] }
             },
             {
@@ -261,14 +261,14 @@ describe('Threads Parser Unit Tests', () => {
                 posted_at: '5h',
                 posted_at_iso: '2026-07-22T09:00:00.000Z',
                 text: '【Claude Code 終端機的額度狀態列更新 | 一鍵配置】',
-                post_url: 'https://www.threads.net/@user_b/post/C987654321',
+                post_url: 'https://www.threads.com/@user_b/post/C987654321',
                 metrics: { likes: null, replies: null, reposts: null, shares: null, views: null, quotes: null, raw: [] }
             }
         ];
 
         const merged = _merge_text_posts_with_dom_posts(textPosts, domPosts, 10);
         expect(merged.length).toBe(2);
-        expect(merged[0].post_url).toBe('https://www.threads.net/@user_a/post/C123456789');
-        expect(merged[1].post_url).toBe('https://www.threads.net/@user_b/post/C987654321');
+        expect(merged[0].post_url).toBe('https://www.threads.com/@user_a/post/C123456789');
+        expect(merged[1].post_url).toBe('https://www.threads.com/@user_b/post/C987654321');
     });
 });
