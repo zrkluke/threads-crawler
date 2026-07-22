@@ -234,7 +234,7 @@ async function _send_telegram_notifications(token: string, chat_id: string): Pro
             const messages: string[] = [];
             const isTagOrSearch = typedItem.mode === "tag" || typedItem.mode === "search";
             const targetLabel = isTagOrSearch ? `#${escapeHtml(target.replace(/^#/, ''))}` : `@${escapeHtml(target.replace(/^@/, ''))}`;
-            const header = `<b>Threads 爬蟲報告</b>\n<b>${targetLabel}</b> (過去 24 小時新貼文)\n\n`;
+            const header = `🧵 <b>Threads 貼文動態</b> ‧ <b>${targetLabel}</b>\n🕒 過去 24 小時最新貼文\n\n`;
             let currentMessage = header;
 
             for (let idx = 0; idx < recentPosts.length; idx++) {
@@ -243,14 +243,14 @@ async function _send_telegram_notifications(token: string, chat_id: string): Pro
                 const postText = (post.text || "").trim();
                 const postUrl = post.post_url;
 
-                let postStr = `<b>【貼文 ${idx + 1}】</b>`;
+                let postStr = `📌 <b>貼文 ${idx + 1}</b>`;
                 if (postedAt) {
-                    postStr += ` <i>(發布於 ${escapeHtml(postedAt)})</i>`;
+                    postStr += ` ‧ <i>${escapeHtml(postedAt)}</i>`;
                 }
                 postStr += `\n${escapeHtml(postText)}\n\n`;
 
                 if (postUrl) {
-                    postStr += `<b>連結：</b> <a href="${escapeHtml(postUrl)}">點此查看原文</a>\n`;
+                    postStr += `🔗 <a href="${escapeHtml(postUrl)}">查看 Threads 原文</a>\n\n`;
                 } else {
                     let fallbackUrl = `https://www.threads.net/@${encodeURIComponent(target.replace(/^@/, ''))}`;
                     if (typedItem.mode === "tag") {
@@ -258,9 +258,8 @@ async function _send_telegram_notifications(token: string, chat_id: string): Pro
                     } else if (typedItem.mode === "search") {
                         fallbackUrl = `https://www.threads.net/search?q=${encodeURIComponent(target)}`;
                     }
-                    postStr += `<b>連結：</b> <a href="${fallbackUrl}">前往 ${targetLabel} 頁面</a> (未取得直接貼文網址)\n`;
+                    postStr += `🔗 <a href="${fallbackUrl}">前往 ${targetLabel} 頁面 (未取得直接網址)</a>\n\n`;
                 }
-                postStr += `────────────────────\n`;
 
                 if (currentMessage.length + postStr.length > 4000) {
                     messages.push(currentMessage);
