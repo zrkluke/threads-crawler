@@ -475,7 +475,9 @@ async function main() {
                 await Actor.pushData(data);
 
             } catch (e: any) {
-                console.error(`Exception occurred in requestHandler while scraping ${url}: ${e.stack}`);
+                const rawError = String(e.stack || e.message || e);
+                const sanitizedError = rawError.replace(/bot\d+:[A-Za-z0-9_-]+/g, 'bot***SECRET_TOKEN***');
+                console.error(`Exception occurred in requestHandler while scraping ${url}: ${sanitizedError}`);
                 await _save_debug_artifacts(page, url, "handler_exception");
                 throw e;
             }

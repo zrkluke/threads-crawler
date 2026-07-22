@@ -31,5 +31,10 @@
 
 ### Spec-5: Normalize Threads Base Domain URL Configuration
 - **Location**: [src/main.ts](file:///c:/PythonSideProjects/Apify爬蟲/threads-crawler/src/main.ts#L23)
-- **Problem**: `THREADS_BASE_URL` was `https://www.threads.com`, whereas Threads canonical domain is `https://www.threads.net`. Mixed domain references cause unnecessary HTTP 301 redirects and cookie scope mismatches.
-- **Requirement**: Standardize all canonical base URLs to `https://www.threads.net`.
+- **Problem**: `THREADS_BASE_URL` was `https://www.threads.net`, but Meta has migrated the canonical Threads domain to `https://www.threads.com`. Mixed domain references cause unnecessary HTTP 301 redirects and cookie scope mismatches.
+- **Requirement**: Standardize all canonical base URLs, fallback URLs, test fixtures, and documentation to `https://www.threads.com`.
+
+### Spec-6: Sanitize Error Logs in Request Handler
+- **Location**: [src/main.ts](file:///c:/PythonSideProjects/Apify爬蟲/threads-crawler/src/main.ts#L477-L481)
+- **Problem**: `requestHandler` exception logging output raw stack traces which could inadvertently expose sensitive URL parameters or data if exceptions occur during scraping specific URLs.
+- **Requirement**: Apply the same Telegram token sanitization logic used in `_send_telegram_notifications` to `requestHandler` exceptions for consistency and defense in depth.
