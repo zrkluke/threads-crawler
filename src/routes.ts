@@ -41,7 +41,7 @@ export const NON_AUTHOR_LINES = new Set<string>([
 ]);
 
 const SIMPLIFIED_CHINESE_MARKERS = new Set<string>(
-    "个们会后发关欢见过还进时说让从对该网车门东长云电学广书买开问题现与扩优软体虽请这里为于号实"
+    "个们会后发关欢见进让从对该网车门东长云电学广书买开现与扩优软体虽请这为于号"
 );
 const CJK_PATTERN = /[\u4e00-\u9fff]/;
 
@@ -462,7 +462,7 @@ export function _profile_replies_url(profile_url: string, username: string): str
         const parsed = new URL(profile_url);
         return `${parsed.protocol}//${parsed.host}/@${username}/replies`;
     } catch {
-        return `https://www.threads.net/@${username}/replies`;
+        return `https://www.threads.com/@${username}/replies`;
     }
 }
 
@@ -582,44 +582,30 @@ export async function _extract_dom_posts(
             }
         };
 
-        const cleanClone = (node: Element): string => {
-            const clone = node.cloneNode(true) as Element;
-            clone.querySelectorAll('a[href]').forEach(link => {
-                const linkText = (link.textContent || '').trim();
-                if (!linkText && (link.querySelector('img') || link.querySelector('svg'))) {
-                    link.remove();
-                }
-            });
-            return (clone.textContent || '').trim();
-        };
-
         const findCardTextForLink = (element: Element, url: string) => {
-            let node: Element | null = element;
-            for (let depth = 0; node && depth < 10; depth++, node = node.parentElement) {
-                if (!isVisible(node)) continue;
-
-                const textVal = cleanClone(node);
-                if (!textVal) continue;
-
-                const linesList = textVal.split('\n').map(line => line.trim()).filter(Boolean);
-                if (linesList.length < 2 || linesList.length > 80) continue;
-                if (textVal.includes('Log in or sign up for Threads')) continue;
-
-                const postUrls = Array.from(new Set(
-                    Array.from(node.querySelectorAll('a[href]'))
-                        .map(link => normalizePostUrl(link.getAttribute('href')))
-                        .filter(Boolean) as string[]
-                ));
-
-                if (postUrls.length >= 1 && postUrls.includes(url)) {
-                    const article = element.closest('[role="article"]');
-                    const contextText = article && isVisible(article)
-                        ? (article.textContent || '').trim()
-                        : textVal;
-                    return { text: textVal, contextText, postUrls };
+            const article = element.closest('[role="article"]') || element.closest('div[data-pressable-container="true"]');
+            const targetContainer = article || element.parentElement;
+            if (!targetContainer || !isVisible(targetContainer)) {
+                let node: Element | null = element.parentElement;
+                for (let depth = 0; node && depth < 6; depth++, node = node.parentElement) {
+                    if (!isVisible(node)) continue;
+                    const textVal = (node.textContent || '').trim();
+                    if (!textVal) continue;
+                    const linesList = textVal.split('\n').map(line => line.trim()).filter(Boolean);
+                    if (linesList.length >= 2 && linesList.length <= 80 && !textVal.includes('Log in or sign up for Threads')) {
+                        return { text: textVal, contextText: textVal, postUrls: [url] };
+                    }
                 }
+                return null;
             }
-            return null;
+
+            const textVal = (targetContainer.textContent || '').trim();
+            if (!textVal) return null;
+            const linesList = textVal.split('\n').map(line => line.trim()).filter(Boolean);
+            if (linesList.length < 2 || linesList.length > 80) return null;
+            if (textVal.includes('Log in or sign up for Threads')) return null;
+
+            return { text: textVal, contextText: textVal, postUrls: [url] };
         };
 
         const candidateLinks = Array.from(document.querySelectorAll('a[href]'))
@@ -653,7 +639,7 @@ export async function _extract_dom_posts(
                 if (card_username.toLowerCase() !== profile_username.toLowerCase()) continue;
             } else {
                 const post_id = card.url.split('/').pop();
-                card.url = `https://www.threads.net/@${profile_username}/post/${post_id}`;
+                card.url = `https://www.threads.com/@${profile_username}/post/${post_id}`;
             }
             if (exclude_reply_context && _has_reply_context(card.contextText)) continue;
         }

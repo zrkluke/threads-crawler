@@ -252,11 +252,11 @@ async function _send_telegram_notifications(token: string, chat_id: string): Pro
                 if (postUrl) {
                     postStr += `🔗 <a href="${escapeHtml(postUrl)}">查看 Threads 原文</a>\n\n`;
                 } else {
-                    let fallbackUrl = `https://www.threads.net/@${encodeURIComponent(target.replace(/^@/, ''))}`;
+                    let fallbackUrl = `https://www.threads.com/@${encodeURIComponent(target.replace(/^@/, ''))}`;
                     if (typedItem.mode === "tag") {
-                        fallbackUrl = `https://www.threads.net/search?q=${encodeURIComponent(target)}&serp_type=tags`;
+                        fallbackUrl = `https://www.threads.com/search?q=${encodeURIComponent(target)}&serp_type=tags`;
                     } else if (typedItem.mode === "search") {
-                        fallbackUrl = `https://www.threads.net/search?q=${encodeURIComponent(target)}`;
+                        fallbackUrl = `https://www.threads.com/search?q=${encodeURIComponent(target)}`;
                     }
                     postStr += `🔗 <a href="${fallbackUrl}">前往 ${targetLabel} 頁面 (未取得直接網址)</a>\n\n`;
                 }
@@ -291,7 +291,9 @@ async function _send_telegram_notifications(token: string, chat_id: string): Pro
             }
         }
     } catch (e: any) {
-        console.error(`Failed to send Telegram notifications: ${e.message}`);
+        const rawError = String(e.stack || e.message || e);
+        const sanitizedError = rawError.replace(/bot\d+:[A-Za-z0-9_-]+/g, 'bot***SECRET_TOKEN***');
+        console.error(`Failed to send Telegram notifications: ${sanitizedError}`);
     }
 }
 
@@ -359,9 +361,12 @@ async function main() {
             const scrapedAt = new Date();
 
             await page.waitForLoadState("domcontentloaded");
-            await page.waitForTimeout(8000);
+            try {
+                await page.waitForSelector('article, a[href*="/post/"], a[href*="/t/"]', { timeout: 4000 });
+            } catch {
+                await page.waitForTimeout(2000);
+            }
             await _expand_truncated_posts(page);
-            await page.waitForTimeout(1000);
             await _remove_link_preview_cards(page);
 
             try {
@@ -417,9 +422,12 @@ async function main() {
                             console.log(`Navigating to replies page: ${repliesUrl}...`);
                             await page.goto(repliesUrl);
                             await page.waitForLoadState("domcontentloaded");
-                            await page.waitForTimeout(8000);
+                            try {
+                                await page.waitForSelector('article, a[href*="/post/"], a[href*="/t/"]', { timeout: 4000 });
+                            } catch {
+                                await page.waitForTimeout(2000);
+                            }
                             await _expand_truncated_posts(page);
-                            await page.waitForTimeout(1000);
                             await _remove_link_preview_cards(page);
 
                             const replyBodyText = await page.locator("body").innerText();
