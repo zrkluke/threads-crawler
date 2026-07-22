@@ -470,7 +470,17 @@ export function _same_post_text(left: string | null | undefined, right: string |
     if (typeof left !== 'string' || typeof right !== 'string') return false;
     const l = left.trim();
     const r = right.trim();
-    return !!(l && r && (l === r || l.includes(r) || r.includes(l)));
+    if (!l || !r) return false;
+    if (l === r || l.includes(r) || r.includes(l)) return true;
+
+    // Strip whitespace, punctuation and brackets for fuzzy text matching
+    const stripPunct = (s: string) => s.replace(/[\s\n\r\t【】\[\]()（）|｜:：\-_,，.!\?！？]/g, '');
+    const cleanL = stripPunct(l);
+    const cleanR = stripPunct(r);
+    if (!cleanL || !cleanR) return false;
+    if (cleanL === cleanR || cleanL.includes(cleanR) || cleanR.includes(cleanL)) return true;
+
+    return false;
 }
 
 export function _merge_text_posts_with_dom_posts(text_posts: ThreadPost[], dom_posts: ThreadPost[], max_posts: number): ThreadPost[] {
@@ -484,15 +494,17 @@ export function _merge_text_posts_with_dom_posts(text_posts: ThreadPost[], dom_p
             if (used_dom_indexes.has(i)) continue;
             const dom_post = dom_posts[i];
 
-            if (text_post.author !== dom_post.author) continue;
-            if (text_post.posted_at !== dom_post.posted_at) continue;
-            if (!_same_post_text(text_post.text, dom_post.text)) continue;
+            const sameAuthor = !text_post.author || !dom_post.author || text_post.author.toLowerCase() === dom_post.author.toLowerCase();
+            const sameTime = text_post.posted_at === dom_post.posted_at;
+            const sameText = _same_post_text(text_post.text, dom_post.text);
 
-            if (typeof dom_post.post_url === 'string') {
-                text_post.post_url = dom_post.post_url;
+            if ((sameAuthor && sameText) || (sameTime && sameText) || (sameText && text_post.text.length > 10)) {
+                if (typeof dom_post.post_url === 'string') {
+                    text_post.post_url = dom_post.post_url;
+                }
+                used_dom_indexes.add(i);
+                break;
             }
-            used_dom_indexes.add(i);
-            break;
         }
     }
 
@@ -573,7 +585,8 @@ export async function _extract_dom_posts(
         const cleanClone = (node: Element): string => {
             const clone = node.cloneNode(true) as Element;
             clone.querySelectorAll('a[href]').forEach(link => {
-                if (link.querySelector('div') || link.querySelector('img') || link.querySelector('svg')) {
+                const linkText = (link.textContent || '').trim();
+                if (!linkText && (link.querySelector('img') || link.querySelector('svg'))) {
                     link.remove();
                 }
             });
@@ -589,7 +602,7 @@ export async function _extract_dom_posts(
                 if (!textVal) continue;
 
                 const linesList = textVal.split('\n').map(line => line.trim()).filter(Boolean);
-                if (linesList.length < 4 || linesList.length > 80) continue;
+                if (linesList.length < 2 || linesList.length > 80) continue;
                 if (textVal.includes('Log in or sign up for Threads')) continue;
 
                 const postUrls = Array.from(new Set(
@@ -598,7 +611,7 @@ export async function _extract_dom_posts(
                         .filter(Boolean) as string[]
                 ));
 
-                if (postUrls.length >= 1 && postUrls[0] === url) {
+                if (postUrls.length >= 1 && postUrls.includes(url)) {
                     const article = element.closest('[role="article"]');
                     const contextText = article && isVisible(article)
                         ? (article.textContent || '').trim()

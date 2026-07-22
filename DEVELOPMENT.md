@@ -24,9 +24,7 @@ The crawler uses a **dual-path parsing strategy** to extract posts.
 - **Failure mode**: Breaks when Threads changes DOM structure or CSS classes.
 
 ### Merge Strategy
-In `profile` mode, both paths run and results are merged (`_merge_text_posts_with_dom_posts`), matching by author + timestamp + text similarity to enrich text-path posts with their `post_url`.
-
-In `search` / `tag` / `thread` / `feed` modes, only the DOM path is used.
+In all modes (`profile`, `search`, `tag`, `thread`, `feed`), both paths run when text and DOM posts exist, and results are merged (`_merge_text_posts_with_dom_posts`), matching by author + timestamp + fuzzy text similarity to enrich text-path posts with their `post_url`.
 
 ---
 

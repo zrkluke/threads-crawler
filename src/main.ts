@@ -232,7 +232,9 @@ async function _send_telegram_notifications(token: string, chat_id: string): Pro
             }
 
             const messages: string[] = [];
-            const header = `<b>Threads 爬蟲報告</b>\n<b>@${escapeHtml(target)}</b> (過去 24 小時新貼文)\n\n`;
+            const isTagOrSearch = typedItem.mode === "tag" || typedItem.mode === "search";
+            const targetLabel = isTagOrSearch ? `#${escapeHtml(target.replace(/^#/, ''))}` : `@${escapeHtml(target.replace(/^@/, ''))}`;
+            const header = `<b>Threads 爬蟲報告</b>\n<b>${targetLabel}</b> (過去 24 小時新貼文)\n\n`;
             let currentMessage = header;
 
             for (let idx = 0; idx < recentPosts.length; idx++) {
@@ -250,8 +252,13 @@ async function _send_telegram_notifications(token: string, chat_id: string): Pro
                 if (postUrl) {
                     postStr += `<b>連結：</b> <a href="${escapeHtml(postUrl)}">點此查看原文</a>\n`;
                 } else {
-                    const profileUrl = `https://www.threads.net/@${target}`;
-                    postStr += `<b>連結：</b> <a href="${profileUrl}">前往 @${escapeHtml(target)} 主頁</a> (未取得貼文網址)\n`;
+                    let fallbackUrl = `https://www.threads.net/@${encodeURIComponent(target.replace(/^@/, ''))}`;
+                    if (typedItem.mode === "tag") {
+                        fallbackUrl = `https://www.threads.net/search?q=${encodeURIComponent(target)}&serp_type=tags`;
+                    } else if (typedItem.mode === "search") {
+                        fallbackUrl = `https://www.threads.net/search?q=${encodeURIComponent(target)}`;
+                    }
+                    postStr += `<b>連結：</b> <a href="${fallbackUrl}">前往 ${targetLabel} 頁面</a> (未取得直接貼文網址)\n`;
                 }
                 postStr += `────────────────────\n`;
 
@@ -390,7 +397,7 @@ async function main() {
                     );
                     const textPosts = _parse_posts(lines, profile.username, userData, scrapedAt);
 
-                    if (userData.mode === "profile" && textPosts.length > 0) {
+                    if (textPosts.length > 0 && domPosts.length > 0) {
                         posts = _merge_text_posts_with_dom_posts(
                             textPosts,
                             domPosts,

@@ -15,6 +15,8 @@ import {
     _parse_visible_metrics,
     _parse_profile,
     _parse_posts,
+    _same_post_text,
+    _merge_text_posts_with_dom_posts,
 } from '../src/routes.js';
 import { _normalize_cookies } from '../src/main.js';
 import { ActorInput } from '../src/types.js';
@@ -219,5 +221,54 @@ describe('Threads Parser Unit Tests', () => {
         expect(c2.path).toBe("/"); // defaults to "/"
         expect(c2.expires).toBe(987654.32);
         expect(c2.sameSite).toBe("Lax");
+    });
+
+    test('test_same_post_text_matching', () => {
+        expect(_same_post_text("最近Codex的額度用完了", "最近Codex的額度用完了，但我不敢用重設限額")).toBe(true);
+        expect(_same_post_text("【Claude Code 終端機的額度狀態列更新】", "【Claude Code 終端機的額度狀態列更新 | 一鍵配置】")).toBe(true);
+        expect(_same_post_text("Completely different post text A", "Completely different post text B")).toBe(false);
+    });
+
+    test('test_merge_text_posts_with_dom_posts_populates_post_url', () => {
+        const textPosts = [
+            {
+                author: 'user_a',
+                posted_at: '2小時',
+                posted_at_iso: '2026-07-22T12:00:00.000Z',
+                text: '最近Codex的額度用完了，不敢用重設限額...',
+                metrics: { likes: '10', replies: '2', reposts: '1', shares: '0', views: null, quotes: null, raw: [] }
+            },
+            {
+                author: 'user_b',
+                posted_at: '5小時',
+                posted_at_iso: '2026-07-22T09:00:00.000Z',
+                text: '【Claude Code 終端機的額度狀態列更新 | 一鍵配置】',
+                metrics: { likes: '50', replies: '8', reposts: '5', shares: '12', views: null, quotes: null, raw: [] }
+            }
+        ];
+
+        const domPosts = [
+            {
+                author: 'user_a',
+                posted_at: '2h',
+                posted_at_iso: '2026-07-22T12:00:00.000Z',
+                text: '最近Codex的額度用完了，不敢用重設限額...',
+                post_url: 'https://www.threads.net/@user_a/post/C123456789',
+                metrics: { likes: null, replies: null, reposts: null, shares: null, views: null, quotes: null, raw: [] }
+            },
+            {
+                author: 'user_b',
+                posted_at: '5h',
+                posted_at_iso: '2026-07-22T09:00:00.000Z',
+                text: '【Claude Code 終端機的額度狀態列更新 | 一鍵配置】',
+                post_url: 'https://www.threads.net/@user_b/post/C987654321',
+                metrics: { likes: null, replies: null, reposts: null, shares: null, views: null, quotes: null, raw: [] }
+            }
+        ];
+
+        const merged = _merge_text_posts_with_dom_posts(textPosts, domPosts, 10);
+        expect(merged.length).toBe(2);
+        expect(merged[0].post_url).toBe('https://www.threads.net/@user_a/post/C123456789');
+        expect(merged[1].post_url).toBe('https://www.threads.net/@user_b/post/C987654321');
     });
 });
